@@ -39,3 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local reference/development captures are not portfolio assets.
+/docs/screenshot-*.png
+# Only the deliberately non-secret environment template is published.
+!.env.example
