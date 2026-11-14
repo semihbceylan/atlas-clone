@@ -16,6 +16,7 @@ import {
   selectWatchlist,
   setSelectedSymbol,
 } from "@/store/slices/terminal-slice";
+import { isCoinbaseLiveEnabled } from "@/lib/market/create-coinbase-feed";
 import { useLivePrice, type LiveMarketApi } from "@/hooks/use-live-candles";
 import type { WatchlistItem } from "@/types/market";
 
@@ -99,7 +100,7 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
                         item.changePercent >= 0 ? "text-terminal-up" : "text-terminal-down"
                       }`}
                     >
-                      {getSymbolInfo(item.symbol).currency === "USD" ? "Canlı · USD" : formatPercent(item.changePercent)}
+                      {getSymbolInfo(item.symbol).currency === "USD" ? (isCoinbaseLiveEnabled(item.symbol) ? "Canlı · USD" : "Demo · USD") : formatPercent(item.changePercent)}
                     </span>
                   </button>
                 </li>
