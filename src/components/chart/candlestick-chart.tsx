@@ -1,11 +1,19 @@
 "use client";
 
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useState } from "react";
+import { DrawingOverlay, type DrawingChart } from "@/components/chart/drawing-overlay";
+import type { ChartTool, Drawing } from "@/lib/chart/drawings";
+import { movingAverage, heikinAshi, type ChartType } from "@/lib/chart/indicators";
 import {
   CandlestickSeries,
   ColorType,
   CrosshairMode,
   HistogramSeries,
+  LineSeries,
+  AreaSeries,
+  BarSeries,
+  BaselineSeries,
+  PriceScaleMode,
   LineStyle,
   TickMarkType,
   createChart,
@@ -71,6 +79,12 @@ interface ChartHandles {
 }
 
 interface CandlestickChartProps {
+  chartType: ChartType;
+  scaleMode: "normal" | "log" | "percent";
+  showGrid: boolean;
+  average: "none" | "sma" | "ema";
+  averagePeriod: number;
+  drawing: { scope: string; tool: ChartTool; onTool: (tool: ChartTool) => void; rows: Drawing[]; onCommit: (rows: Drawing[]) => void; hidden: boolean; magnet: boolean; repeat: boolean; color: string; ready: boolean };
   api: LiveMarketApi;
   timeframe: Timeframe;
   showVolume: boolean;
@@ -111,7 +125,10 @@ export const CandlestickChart = memo(function CandlestickChart({
   crosshairSnapped,
   onCrosshairMove,
   viewResetToken,
+  drawing,
+  chartType, scaleMode, showGrid, average, averagePeriod,
 }: CandlestickChartProps) {
+  const [drawingHandles, setDrawingHandles] = useState<DrawingChart | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const handlesRef = useRef<ChartHandles | null>(null);
   const volumeVisibleRef = useRef(showVolume);
@@ -253,6 +270,7 @@ export const CandlestickChart = memo(function CandlestickChart({
     chart.subscribeCrosshairMove(handleCrosshairMove);
 
     handlesRef.current = { chart, candleSeries, volumeSeries };
+    setDrawingHandles({ chart, candleSeries });
 
     // The grid can resize a widget without the window changing size, so an
     // explicit observer is required for correct chart dimensions.
@@ -316,6 +334,40 @@ export const CandlestickChart = memo(function CandlestickChart({
   }, [showLastPriceLine]);
 
   useEffect(() => {
+    const handles = handlesRef.current;
+    if (!handles) return;
+    handles.candleSeries.applyOptions({ visible: chartType === "candles" });
+    if (chartType === "candles") return;
+    const firstPrice = api.getSnapshot().candles[0]?.close ?? 0;
+    const series = chartType === "bars" ? handles.chart.addSeries(BarSeries, { upColor: UP_COLOR, downColor: DOWN_COLOR }) : chartType === "hollow" || chartType === "heikin" ? handles.chart.addSeries(CandlestickSeries, { upColor: chartType === "hollow" ? "transparent" : UP_COLOR, downColor: DOWN_COLOR, borderUpColor: UP_COLOR, borderDownColor: DOWN_COLOR, wickUpColor: UP_COLOR, wickDownColor: DOWN_COLOR }) : chartType === "baseline" ? handles.chart.addSeries(BaselineSeries, { baseValue: { type: "price", price: firstPrice } }) : chartType === "histogram" ? handles.chart.addSeries(HistogramSeries, { color: "#9292ff" }) : chartType === "area" ? handles.chart.addSeries(AreaSeries, { lineColor: "#9292ff", topColor: "#7165ff55", bottomColor: "#7165ff00" }) : handles.chart.addSeries(LineSeries, { color: "#9292ff", lineWidth: 2 });
+    const data = (candles: readonly Candle[]) => chartType === "heikin" ? heikinAshi(candles).map(toCandlestickData) : chartType === "bars" || chartType === "hollow" ? candles.map(toCandlestickData) : candles.map(c => ({ time: c.time as UTCTimestamp, value: c.close }));
+    series.setData(data(api.getSnapshot().candles));
+    const unsubscribe = api.subscribe(event => {
+      if (event.type === "reset") series.setData(data(event.candles));
+      else if (chartType === "heikin") series.setData(data(api.getSnapshot().candles));
+      else series.update(chartType === "bars" || chartType === "hollow" ? toCandlestickData(event.candle) : { time: event.candle.time as UTCTimestamp, value: event.candle.close });
+    });
+    return () => { unsubscribe(); if (handlesRef.current === handles) handles.chart.removeSeries(series); };
+  }, [chartType, api]);
+
+  useEffect(() => {
+    handlesRef.current?.chart.priceScale("right").applyOptions({ mode: scaleMode === "log" ? PriceScaleMode.Logarithmic : scaleMode === "percent" ? PriceScaleMode.Percentage : PriceScaleMode.Normal });
+  }, [scaleMode]);
+  useEffect(() => {
+    handlesRef.current?.chart.applyOptions({ grid: { vertLines: { visible: showGrid }, horzLines: { visible: showGrid } } });
+  }, [showGrid]);
+
+  useEffect(() => {
+    const handles = handlesRef.current;
+    if (!handles || average === "none") return;
+    const series = handles.chart.addSeries(LineSeries, { color: "#f5bd4f", lineWidth: 1, priceLineVisible: false, lastValueVisible: false });
+    const refresh = () => series.setData(movingAverage(api.getSnapshot().candles, averagePeriod, average === "ema").map(point => ({ ...point, time: point.time as UTCTimestamp })));
+    refresh();
+    const unsubscribe = api.subscribe(refresh);
+    return () => { unsubscribe(); if (handlesRef.current === handles) handles.chart.removeSeries(series); };
+  }, [average, averagePeriod, api]);
+
+  useEffect(() => {
     const mode = crosshairSnapped ? CrosshairMode.Magnet : CrosshairMode.Normal;
     handlesRef.current?.chart.applyOptions({ crosshair: { mode } });
   }, [crosshairSnapped]);
@@ -335,6 +387,7 @@ export const CandlestickChart = memo(function CandlestickChart({
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="absolute inset-0" />
+      <DrawingOverlay key={drawing.scope} {...drawing} handles={drawingHandles} candles={() => api.getSnapshot().candles} intervalSeconds={timeframe === "1D" ? 86400 : timeframe === "1h" ? 3600 : timeframe === "15m" ? 900 : timeframe === "5m" ? 300 : 60}/>
     </div>
   );
 });

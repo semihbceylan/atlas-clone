@@ -3,30 +3,32 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import ReactGridLayout, {
   useContainerWidth,
-  verticalCompactor,
   type Layout,
   type LayoutItem,
 } from "react-grid-layout";
+import { noOverlapCompactor } from "react-grid-layout/core";
 // Structural CSS for the grid and its resize handles. Theming lives in globals.css.
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 import type { ReactNode } from "react";
 import {
-  ALL_WIDGET_IDS,
   DEFAULT_LAYOUT,
+  ALL_WIDGET_IDS,
   GRID_COLS,
+  GRID_ROWS,
+  WIDGET_MIN_SIZE,
   GRID_CONTAINER_PADDING,
   GRID_DRAG_CANCEL,
   GRID_DRAG_HANDLE,
   GRID_MARGIN,
-  GRID_ROW_HEIGHT,
   type WidgetId,
 } from "@/config/default-layout";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { clearLayout, loadLayout, saveLayout } from "@/lib/storage/layout-storage";
-import { selectLayoutResetToken } from "@/store/slices/terminal-slice";
-import { useAppSelector } from "@/store/hooks";
+import { selectLayoutResetToken, toggleModule } from "@/store/slices/terminal-slice";
+import { useAppDispatch, useAppSelector } from "@/store/hooks";
+import { WidgetContext, type WidgetCommand } from "@/components/terminal/widget-context";
 
 interface DashboardGridProps {
   /** One node per widget id. Order in the DOM follows `ALL_WIDGET_IDS`. */
@@ -74,6 +76,7 @@ function toPersistedLayout(layout: Layout): Layout {
  *    headers, so the chart's crosshair and zoom gestures never move the panel.
  */
 export function DashboardGrid({ widgets }: DashboardGridProps) {
+  const dispatch = useAppDispatch();
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1600 });
   const hydrated = useHydrated();
   const [containerHeight, setContainerHeight] = useState(0);
@@ -85,12 +88,31 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
     return () => observer.disconnect();
   }, [containerRef]);
   const layoutResetToken = useAppSelector(selectLayoutResetToken);
+  const visibleModules = useAppSelector(state => state.terminal.visibleModules);
 
   // Read localStorage exactly once, after hydration. `loadLayout` validates the
   // payload and returns `null` for anything unusable (old schema, corrupt JSON).
   const restoredLayout = useMemo(() => (hydrated ? loadLayout() : null), [hydrated]);
 
   const [edited, setEdited] = useState<EditedLayout | null>(null);
+  const restoredCopies = useMemo<string[]>(() => {
+    if (!hydrated) return [];
+    try {
+      const value: unknown = JSON.parse(localStorage.getItem("terminal-lab.copies.v1") ?? "[]");
+      return Array.isArray(value) ? [...new Set(value.filter((id): id is string => typeof id === "string" && id.includes(":") && ALL_WIDGET_IDS.includes(id.split(":")[0] as WidgetId)))].slice(0, 30) : [];
+    } catch { return []; }
+  }, [hydrated]);
+  const [copies, setCopies] = useState<string[] | null>(null);
+  const instances = [...visibleModules, ...(copies ?? restoredCopies)];
+  const [stack, setStack] = useState<string[]>([]);
+  if (instances.some(id => !stack.includes(id)) || stack.some(id => !instances.includes(id))) {
+    setStack([...stack.filter(id => instances.includes(id)), ...instances.filter(id => !stack.includes(id))]);
+  }
+  const raise = (id: string) => setStack(current => current[current.length - 1] === id ? current : [...current.filter(value => value !== id), id]);
+  const updateCopies = (next: string[]) => {
+    setCopies(next);
+    try { localStorage.setItem("terminal-lab.copies.v1", JSON.stringify(next)); } catch { /* Optional storage. */ }
+  };
 
   // A newer reset counter than the one the current edit was made against means
   // the user asked for the default arrangement. Deriving the rendered layout
@@ -129,13 +151,46 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
     [layoutResetToken],
   );
 
-  const narrow = width < 700;
-  const renderedLayout = narrow ? layout.map((item, index) => ({ ...item, x: 0, y: index === 0 ? 0 : 12 + (index - 1) * 6, w: GRID_COLS, h: index === 0 ? 12 : 6, minW: GRID_COLS })) : layout;
+  const activeLayout = instances.map((id, index) => layout.find(item => item.i === id) ?? {
+    i: id, x: 8 + (index % 5) * 3, y: 2 + (index % 5) * 2,
+    w: 24, h: 14, minW: 10, minH: 6,
+  });
+  const renderedLayout = activeLayout.map(item => {
+    const minimum = WIDGET_MIN_SIZE[item.i.split(":")[0] as WidgetId];
+    const w = Math.max(minimum.minW, Math.min(GRID_COLS, item.w));
+    const h = Math.max(minimum.minH, Math.min(GRID_ROWS, item.h));
+    return { ...item, ...minimum, w, h, x: Math.min(item.x, GRID_COLS - w), y: Math.min(item.y, GRID_ROWS - h) };
+  });
+  // New modules start on top; interaction then determines the frontmost window.
+  const stackingOrder = [...instances.filter(id => !stack.includes(id)), ...stack.filter(id => instances.includes(id))];
+  const command = (id: string, action: WidgetCommand) => {
+    const type = id.split(":")[0] as WidgetId;
+    if (action === "remove") {
+      if (id.includes(":")) updateCopies(instances.filter(value => value.includes(":") && value !== id));
+      else dispatch(toggleModule(type));
+      return;
+    }
+    const item = renderedLayout.find(row => row.i === id);
+    if (!item) return;
+    if (action === "duplicate") {
+      if (instances.length >= 30) return;
+      const nextId = `${type}:${crypto.randomUUID()}`;
+      updateCopies([...instances.filter(value => value.includes(":")), nextId]);
+      persistLayout([...renderedLayout, { ...item, i: nextId, x: Math.min(GRID_COLS - item.w, item.x + 2), y: Math.min(GRID_ROWS - item.h, item.y + 1) }]);
+      raise(nextId);
+      return;
+    }
+    const defaults = DEFAULT_LAYOUT.find(row => row.i === type) ?? { w: 24, h: 14 };
+    const size = action === "expand" ? { x: 0, y: 0, w: GRID_COLS, h: GRID_ROWS } : { w: defaults.w, h: defaults.h, x: Math.min(item.x, GRID_COLS - defaults.w), y: Math.min(item.y, GRID_ROWS - defaults.h) };
+    persistLayout(renderedLayout.map(row => row.i === id ? { ...row, ...size } : row));
+    raise(id);
+  };
 
   return (
     <div
       ref={containerRef}
-      className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+      data-testid="workspace"
+      className="relative isolate min-h-0 flex-1 overflow-hidden"
 
     >
       {/*
@@ -143,37 +198,42 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
         client render both use `initialWidth` and the default layout, so the
         markup matches; the saved layout is applied right after hydration.
       */}
-      {mounted ? (
+      {mounted && hydrated ? (
         <ReactGridLayout
           width={width}
+          autoSize={false}
+          style={{ height: "100%" }}
           layout={renderedLayout}
           gridConfig={{
             cols: GRID_COLS,
-            rowHeight: containerHeight ? Math.max(26, (containerHeight - 24) / 12) : GRID_ROW_HEIGHT,
+            maxRows: GRID_ROWS,
+            rowHeight: Math.max(1, (containerHeight - GRID_CONTAINER_PADDING[1] * 2 - GRID_MARGIN[1] * (GRID_ROWS - 1)) / GRID_ROWS),
             margin: GRID_MARGIN,
             containerPadding: GRID_CONTAINER_PADDING,
           }}
           dragConfig={{
-            enabled: !narrow,
+            enabled: true,
+            bounded: true,
             handle: GRID_DRAG_HANDLE,
             cancel: GRID_DRAG_CANCEL,
           }}
           resizeConfig={{
-            enabled: !narrow,
-            handles: ["se", "s", "e"],
+            enabled: true,
+            handles: ["n", "ne", "e", "se", "s", "sw", "w", "nw"],
           }}
-          compactor={verticalCompactor}
-          onLayoutChange={narrow ? undefined : handleLayoutChange}
+          compactor={noOverlapCompactor}
+          onLayoutChange={handleLayoutChange}
           onDragStop={persistLayout}
           onResizeStop={persistLayout}
         >
-          {ALL_WIDGET_IDS.map((id) => (
-            <div key={id} className="min-h-0 overflow-hidden">
-              {widgets[id]}
+          {instances.map((id) => (
+            <div key={id} data-widget-id={id} onPointerDownCapture={() => raise(id)} onFocusCapture={() => raise(id)} style={{ zIndex: stackingOrder.indexOf(id) + 1 }} className="min-h-0 overflow-hidden">
+              <WidgetContext.Provider value={{ id, type: id.split(":")[0] as WidgetId, command: action => command(id, action) }}>{widgets[id.split(":")[0] as WidgetId]}</WidgetContext.Provider>
             </div>
           ))}
         </ReactGridLayout>
       ) : null}
+      {instances.length === 0 ? <p className="p-8 text-center text-terminal-muted">Çalışma alanın boş. Modül ekle menüsünden bir modül seç.</p> : null}
     </div>
   );
 }

@@ -7,6 +7,9 @@ import { CandlestickChart } from "@/components/chart/candlestick-chart";
 import { ChartFooter } from "@/components/chart/chart-footer";
 import { ChartHeader } from "@/components/chart/chart-header";
 import { DrawingToolbar } from "@/components/chart/drawing-toolbar";
+import { useDrawings } from "@/components/chart/use-drawings";
+import type { ChartTool } from "@/lib/chart/drawings";
+import type { ChartType } from "@/lib/chart/indicators";
 import { IconButton } from "@/components/terminal/icon-button";
 import { WidgetFrame } from "@/components/terminal/widget-frame";
 import { getSymbolInfo } from "@/config/market-symbols";
@@ -16,11 +19,9 @@ import { COINBASE_PRODUCTS } from "@/lib/market/create-coinbase-feed";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import {
   applyFill,
-  selectActiveDrawingTool,
   selectIndicators,
   selectSelectedSymbol,
   selectTimeframe,
-  setActiveDrawingTool,
   setTimeframe,
 } from "@/store/slices/terminal-slice";
 import type { Candle } from "@/types/market";
@@ -53,7 +54,17 @@ export function ChartWidget({ api }: ChartWidgetProps) {
   const quote = useLivePrice(api);
   const symbol = useAppSelector(selectSelectedSymbol);
   const timeframe = useAppSelector(selectTimeframe);
-  const activeTool = useAppSelector(selectActiveDrawingTool);
+  const [activeTool, setTool] = useState<ChartTool>("cursor");
+  const [magnet, setMagnet] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [repeat, setRepeat] = useState(false);
+  const [color, setColor] = useState("#9292ff");
+  const [chartType, setChartType] = useState<ChartType>("candles");
+  const [scaleMode, setScaleMode] = useState<"normal" | "log" | "percent">("normal");
+  const [showGrid, setShowGrid] = useState(true);
+  const [average, setAverage] = useState<"none" | "sma" | "ema">("none");
+  const [averagePeriod, setAveragePeriod] = useState(20);
+  const drawings = useDrawings(symbol);
   const indicators = useAppSelector(selectIndicators);
 
   const [lastAction, setLastAction] = useState<string | null>(null);
@@ -156,21 +167,36 @@ export function ChartWidget({ api }: ChartWidgetProps) {
       actions={headerActions}
       bodyClassName="flex flex-col overflow-hidden"
     >
+      <div className="widget-no-drag flex shrink-0 flex-wrap items-center gap-2 border-b border-terminal-border px-3 py-1 text-[10px]">
+        <select aria-label="Grafik tipi" value={chartType} onChange={e => setChartType(e.target.value as typeof chartType)} className="max-w-28 bg-terminal-bg"><option value="candles">Mum</option><option value="line">Çizgi</option><option value="area">Alan</option><option value="bars">Çubuk</option><option value="hollow">İçi boş mumlar</option><option value="heikin">Heikin Ashi</option><option value="baseline">Taban çizgisi</option><option value="histogram">Histogram</option></select>
+        <select aria-label="Fiyat ölçeği" value={scaleMode} onChange={e => setScaleMode(e.target.value as typeof scaleMode)} className="max-w-20 bg-terminal-bg"><option value="normal">Normal</option><option value="log">Log</option><option value="percent">%</option></select>
+        <button aria-label="Grafik ızgarası" aria-pressed={showGrid} onClick={() => setShowGrid(!showGrid)} className="p-1">Izgara</button>
+        <select aria-label="Hareketli ortalama" value={average} onChange={e => setAverage(e.target.value as typeof average)} className="max-w-20 bg-terminal-bg"><option value="none">MA kapalı</option><option value="sma">SMA</option><option value="ema">EMA</option></select>
+        {average !== "none" ? <input aria-label="Ortalama periyodu" type="number" min={2} max={200} value={averagePeriod} onChange={e => setAveragePeriod(Math.min(200, Math.max(2, Number(e.target.value) || 2)))} className="w-10 bg-terminal-bg"/> : null}
+      </div>
       <div className="relative min-h-0 flex-1">
         <DrawingToolbar
           activeTool={activeTool}
-          onSelectTool={(tool) => dispatch(setActiveDrawingTool(tool))}
-          onClear={() => dispatch(setActiveDrawingTool("cursor"))}
+          onSelectTool={tool => { setTool(tool); setHidden(false); }}
+          onClear={() => drawings.commit(drawings.rows.filter(row => row.locked))}
+          count={drawings.rows.length}
+          magnet={magnet} onMagnet={() => setMagnet(!magnet)}
+          hidden={hidden} onHidden={() => setHidden(!hidden)}
+          repeat={repeat} onRepeat={() => setRepeat(!repeat)}
+          color={color} onColor={setColor}
+          onUndo={drawings.undo} onRedo={drawings.redo} canUndo={drawings.canUndo} canRedo={drawings.canRedo}
         />
 
         {/* Left padding reserves room for the drawing rail. */}
-        <div className="absolute inset-0 pl-9">
+        <div className="absolute inset-0 pl-11">
           <CandlestickChart
+            chartType={chartType} scaleMode={scaleMode} showGrid={showGrid} average={average} averagePeriod={averagePeriod}
             api={api}
             timeframe={timeframe}
             showVolume={indicators.volume}
             showLastPriceLine={indicators.lastPriceLine}
-            crosshairSnapped={activeTool === "magnet"}
+            crosshairSnapped={magnet}
+            drawing={{ scope: symbol, tool: activeTool, onTool: setTool, rows: drawings.rows, onCommit: drawings.commit, hidden, magnet, repeat, color, ready: drawings.ready }}
             onCrosshairMove={handleCrosshairMove}
             viewResetToken={viewResetToken}
           />
@@ -187,8 +213,8 @@ export function ChartWidget({ api }: ChartWidgetProps) {
       </div>
 
       <ChartFooter
-        crosshairSnapped={activeTool === "magnet"}
-        onToggleSnap={() => dispatch(setActiveDrawingTool(activeTool === "magnet" ? "cursor" : "magnet"))}
+        crosshairSnapped={magnet}
+        onToggleSnap={() => setMagnet(!magnet)}
         status={quote.status}
         timeframe={timeframe}
         onTimeframeChange={(next) => dispatch(setTimeframe(next))}

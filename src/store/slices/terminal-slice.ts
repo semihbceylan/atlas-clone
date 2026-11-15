@@ -1,6 +1,7 @@
 import { createSlice, type PayloadAction } from "@reduxjs/toolkit";
 import type { Position, Timeframe, WatchlistItem } from "@/types/market";
 import { DEFAULT_SYMBOL } from "@/config/market-symbols";
+import { ALL_WIDGET_IDS, type WidgetId } from "@/config/default-layout";
 
 /**
  * Low-frequency terminal state only.
@@ -26,12 +27,16 @@ export type DrawingTool =
   | "eraser";
 
 export interface TerminalState {
+  visibleModules: WidgetId[];
+  orders: { id: string; symbol: string; quantity: number; price: number; createdAt: string }[];
   /** Symbol currently loaded in the chart. */
   selectedSymbol: string;
   /** Active chart interval. */
   timeframe: Timeframe;
   /** Symbols the user follows. Empty on first load, matching the reference. */
   watchlist: WatchlistItem[];
+  watchlists: { id: string; name: string; items: WatchlistItem[] }[];
+  activeWatchlist: string;
   /**
    * Demo positions opened from the chart's Al/Sat buttons. Starts empty so the
    * widget renders its empty state, exactly like the reference screenshot.
@@ -55,9 +60,13 @@ export interface TerminalState {
 }
 
 const initialState: TerminalState = {
+  visibleModules: ["chart", "positions", "watchlist"],
+  orders: [],
   selectedSymbol: DEFAULT_SYMBOL,
   timeframe: "5m",
   watchlist: [],
+  watchlists: [{ id: "default", name: "Takip Ettiklerim", items: [] }],
+  activeWatchlist: "default",
   positions: [],
   positionSequence: 0,
   activeDrawingTool: "cursor",
@@ -72,6 +81,50 @@ const terminalSlice = createSlice({
   name: "terminal",
   initialState,
   reducers: {
+    restoreWatchlists(state, action: PayloadAction<unknown>) {
+      const value = action.payload as { lists?: unknown; active?: unknown } | null;
+      if (!value || !Array.isArray(value.lists)) return;
+      const lists = value.lists.filter((list): list is TerminalState["watchlists"][number] => !!list && typeof list.id === "string" && typeof list.name === "string" && Array.isArray(list.items) && list.items.every((item: WatchlistItem) => item && typeof item.symbol === "string" && typeof item.name === "string" && Number.isFinite(item.price) && Number.isFinite(item.changePercent))).slice(0, 20);
+      if (!lists.length || new Set(lists.map(list => list.id)).size !== lists.length) return;
+      state.watchlists = lists;
+      state.activeWatchlist = lists.some(list => list.id === value.active) ? value.active as string : lists[0].id;
+      state.watchlist = lists.find(list => list.id === state.activeWatchlist)!.items;
+    },
+    createWatchlist(state, action: PayloadAction<{ id: string; name: string }>) {
+      if (!action.payload.name.trim() || state.watchlists.length >= 20 || state.watchlists.some(list => list.id === action.payload.id)) return;
+      const current = state.watchlists.find(list => list.id === state.activeWatchlist);
+      if (current) current.items = state.watchlist;
+      state.watchlists.push({ ...action.payload, name: action.payload.name.trim().slice(0, 60), items: [] });
+      state.activeWatchlist = action.payload.id;
+      state.watchlist = [];
+    },
+    selectWatchlistById(state, action: PayloadAction<string>) {
+      const next = state.watchlists.find(list => list.id === action.payload);
+      if (!next) return;
+      const current = state.watchlists.find(list => list.id === state.activeWatchlist);
+      if (current) current.items = state.watchlist;
+      state.activeWatchlist = next.id;
+      state.watchlist = next.items;
+    },
+    renameWatchlist(state, action: PayloadAction<string>) {
+      const current = state.watchlists.find(list => list.id === state.activeWatchlist);
+      if (current && action.payload.trim()) current.name = action.payload.trim().slice(0, 60);
+    },
+    deleteWatchlist(state) {
+      if (state.watchlists.length <= 1) return;
+      state.watchlists = state.watchlists.filter(list => list.id !== state.activeWatchlist);
+      state.activeWatchlist = state.watchlists[0].id;
+      state.watchlist = state.watchlists[0].items;
+    },
+    restoreModules(state, action: PayloadAction<unknown>) {
+      if (!Array.isArray(action.payload)) return;
+      state.visibleModules = ALL_WIDGET_IDS.filter(id => (action.payload as unknown[]).includes(id));
+    },
+    toggleModule(state, action: PayloadAction<WidgetId>) {
+      state.visibleModules = state.visibleModules.includes(action.payload)
+        ? state.visibleModules.filter(id => id !== action.payload)
+        : [...state.visibleModules, action.payload];
+    },
     setSelectedSymbol(state, action: PayloadAction<string>) {
       state.selectedSymbol = action.payload;
     },
@@ -94,9 +147,14 @@ const terminalSlice = createSlice({
      * Applies a simulated fill. Buys and sells on the same symbol net into one
      * weighted-average position, which is how a real position ledger behaves.
      */
-    applyFill(state, action: PayloadAction<{ symbol: string; quantity: number; price: number }>) {
+    applyFill: {
+      prepare(fill: { symbol: string; quantity: number; price: number }) {
+        return { payload: { ...fill, createdAt: new Date().toISOString() } };
+      },
+      reducer(state, action: PayloadAction<{ symbol: string; quantity: number; price: number; createdAt: string }>) {
       const { symbol, quantity, price } = action.payload;
-      if (!Number.isFinite(quantity) || quantity === 0 || !Number.isFinite(price)) return;
+      if (!Number.isFinite(quantity) || quantity === 0 || !Number.isFinite(price) || price <= 0) return;
+      state.orders.unshift({ ...action.payload, id: `order-${state.orders.length + 1}` });
 
       const existing = state.positions.find((position) => position.symbol === symbol);
 
@@ -124,8 +182,9 @@ const terminalSlice = createSlice({
       const sameDirection = Math.sign(existing.quantity) === Math.sign(quantity);
       existing.averagePrice = sameDirection
         ? (existing.averagePrice * existing.quantity + price * quantity) / nextQuantity
-        : price;
+        : Math.sign(nextQuantity) === Math.sign(existing.quantity) ? existing.averagePrice : price;
       existing.quantity = nextQuantity;
+      },
     },
     setActiveDrawingTool(state, action: PayloadAction<DrawingTool>) {
       state.activeDrawingTool = action.payload;
@@ -149,6 +208,9 @@ export const {
   setActiveDrawingTool,
   toggleIndicator,
   requestLayoutReset,
+  toggleModule,
+  restoreModules,
+  restoreWatchlists, createWatchlist, selectWatchlistById, renameWatchlist, deleteWatchlist,
 } = terminalSlice.actions;
 
 export const terminalReducer = terminalSlice.reducer;

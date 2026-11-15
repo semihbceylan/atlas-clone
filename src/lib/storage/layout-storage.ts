@@ -1,5 +1,5 @@
 import type { Layout, LayoutItem } from "react-grid-layout";
-import { GRID_COLS, ALL_WIDGET_IDS } from "@/config/default-layout";
+import { GRID_COLS, GRID_ROWS, ALL_WIDGET_IDS, WIDGET_MIN_SIZE, type WidgetId } from "@/config/default-layout";
 
 /**
  * localStorage persistence for the dashboard layout.
@@ -13,7 +13,7 @@ import { GRID_COLS, ALL_WIDGET_IDS } from "@/config/default-layout";
  *    after mount, which avoids hydration mismatches.
  */
 
-export const LAYOUT_STORAGE_KEY = "atlas-terminal.layout.v1";
+export const LAYOUT_STORAGE_KEY = "atlas-terminal.layout.v2";
 
 /** Minimal structural check for a persisted grid item. */
 function isLayoutItem(value: unknown): value is Layout[number] {
@@ -42,13 +42,15 @@ export function sanitiseLayout(value: unknown): Layout | null {
     if (!isLayoutItem(candidate)) continue;
 
     const id = candidate.i;
-    if (!ALL_WIDGET_IDS.includes(id as (typeof ALL_WIDGET_IDS)[number])) continue;
+    const type = id.split(":")[0] as WidgetId;
+    if (!ALL_WIDGET_IDS.includes(type)) continue;
     if (sanitised.some((item) => item.i === id)) continue;
 
-    const w = Math.max(1, Math.min(GRID_COLS, Math.round(candidate.w)));
-    const h = Math.max(1, Math.round(candidate.h));
+    const minimum = WIDGET_MIN_SIZE[type];
+    const w = Math.max(minimum.minW, Math.min(GRID_COLS, Math.round(candidate.w)));
+    const h = Math.max(minimum.minH, Math.min(GRID_ROWS, Math.round(candidate.h)));
     const x = Math.max(0, Math.min(GRID_COLS - w, Math.round(candidate.x)));
-    const y = Math.max(0, Math.round(candidate.y));
+    const y = Math.max(0, Math.min(GRID_ROWS - h, Math.round(candidate.y)));
 
     sanitised.push({
       i: id,
@@ -56,14 +58,11 @@ export function sanitiseLayout(value: unknown): Layout | null {
       y,
       w,
       h,
-      minW: Number.isFinite(candidate.minW) ? candidate.minW : undefined,
-      minH: Number.isFinite(candidate.minH) ? candidate.minH : undefined,
+      ...minimum,
     });
   }
 
-  // A partial layout would leave widgets without a slot, so require all of them.
-  const complete = ALL_WIDGET_IDS.every((id) => sanitised.some((item) => item.i === id));
-  return complete ? sanitised : null;
+  return sanitised.length ? sanitised : null;
 }
 
 /** Reads and validates the saved layout. Returns `null` on any problem. */
@@ -72,7 +71,10 @@ export function loadLayout(): Layout | null {
 
   try {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (!raw) return null;
+    if (!raw) {
+      const old = JSON.parse(window.localStorage.getItem("atlas-terminal.layout.v1") ?? "null");
+      return Array.isArray(old) ? sanitiseLayout(old.filter(isLayoutItem).map(item => ({ ...item, x: item.x * 4, w: item.w * 4, y: item.y * 2, h: item.h * 2, minW: item.minW === undefined ? undefined : item.minW * 4, minH: item.minH === undefined ? undefined : item.minH * 2 }))) : null;
+    }
     return sanitiseLayout(JSON.parse(raw));
   } catch {
     // Corrupt JSON, disabled storage, quota errors — all mean "use the default".
@@ -105,6 +107,7 @@ export function clearLayout(): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(LAYOUT_STORAGE_KEY);
+    window.localStorage.removeItem("atlas-terminal.layout.v1");
   } catch {
     // Ignore.
   }

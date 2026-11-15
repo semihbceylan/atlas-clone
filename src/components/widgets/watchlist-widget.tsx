@@ -15,6 +15,7 @@ import {
   selectSelectedSymbol,
   selectWatchlist,
   setSelectedSymbol,
+  createWatchlist, selectWatchlistById, renameWatchlist, deleteWatchlist,
 } from "@/store/slices/terminal-slice";
 import { isCoinbaseLiveEnabled } from "@/lib/market/create-coinbase-feed";
 import { useLivePrice, type LiveMarketApi } from "@/hooks/use-live-candles";
@@ -32,6 +33,12 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
   const dispatch = useAppDispatch();
   const watchlist = useAppSelector(selectWatchlist);
   const selectedSymbol = useAppSelector(selectSelectedSymbol);
+  const lists = useAppSelector(state => state.terminal.watchlists);
+  const activeList = useAppSelector(state => state.terminal.activeWatchlist);
+  const [listName, setListName] = useState("");
+  const [market, setMarket] = useState("all");
+  const [sort, setSort] = useState("manual");
+  const rows = watchlist.filter(item => market === "all" || getSymbolInfo(item.symbol).exchange === market).toSorted((a, b) => sort === "symbol" ? a.symbol.localeCompare(b.symbol) : sort === "change" ? b.changePercent - a.changePercent : 0);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const pickerRef = useRef<HTMLDivElement | null>(null);
@@ -114,12 +121,21 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
 
   return (
     <WidgetFrame title="Takip Ettiklerim" actions={actions}>
+      <div className="flex flex-wrap gap-1 border-b border-terminal-border p-2 text-[11px]">
+        <select aria-label="Takip listesi seç" value={activeList} onChange={e => dispatch(selectWatchlistById(e.target.value))} className="min-w-0 bg-terminal-bg p-1">{lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}</select>
+        <input aria-label="Takip listesi adı" value={listName} onChange={e => setListName(e.target.value)} maxLength={60} placeholder="Liste adı" className="w-24 min-w-0 bg-terminal-bg p-1"/>
+        <button disabled={!listName.trim() || lists.length >= 20} onClick={() => { dispatch(createWatchlist({ id: crypto.randomUUID(), name: listName })); setListName(""); }} className="disabled:opacity-40">Yeni liste</button>
+        <button disabled={!listName.trim()} onClick={() => { dispatch(renameWatchlist(listName)); setListName(""); }} className="disabled:opacity-40">Yeniden adlandır</button>
+        <button disabled={lists.length <= 1} onClick={() => { if (window.confirm("Seçili takip listesi silinsin mi?")) dispatch(deleteWatchlist()); }} className="text-terminal-down disabled:opacity-40">Takip listesini sil</button>
+        <select aria-label="Takip listesi piyasası" value={market} onChange={e => setMarket(e.target.value)} className="bg-terminal-bg p-1"><option value="all">Tümü</option><option value="BIST">Yatırım</option><option value="Coinbase">Kripto</option></select>
+        <select aria-label="Takip listesi sıralaması" value={sort} onChange={e => setSort(e.target.value)} className="bg-terminal-bg p-1"><option value="manual">Ekleme sırası</option><option value="symbol">Sembol A–Z</option><option value="change">Değişim ↓</option></select>
+      </div>
       {watchlist.length === 0 ? (
         <WatchlistEmptyState onAddSymbol={() => setPickerOpen(true)} />
       ) : (
         <div className="flex h-full flex-col">
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            {watchlist.map((item) => {
+            {rows.map((item) => {
               const isSelected = item.symbol === selectedSymbol;
               const isCrypto = getSymbolInfo(item.symbol).currency === "USD";
               const rowPrice = isSelected ? quote.price : item.price;
@@ -127,6 +143,7 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
               return (
                 <div
                   key={item.symbol}
+                  data-search-symbol={`${item.symbol} ${item.name}`}
                   className={`group flex items-center gap-2 border-b border-terminal-border/60 px-3 py-2 ${
                     isSelected ? "bg-terminal-accent/10" : "hover:bg-terminal-hover/60"
                   }`}
@@ -147,7 +164,7 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
                       <span className="block truncate text-[11.5px] font-semibold text-terminal-text">
                         {item.symbol}
                       </span>
-                      <span className="block truncate text-[10px] text-terminal-muted">
+                      <span data-company-name className="block truncate text-[10px] text-terminal-muted">
                         {item.name}
                       </span>
                     </span>

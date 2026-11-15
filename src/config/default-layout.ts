@@ -9,7 +9,8 @@ import type { Layout } from "react-grid-layout";
  * 12-row chart height maps to roughly 830px of usable canvas.
  */
 
-export const GRID_COLS = 12;
+export const GRID_COLS = 48;
+export const GRID_ROWS = 24;
 export const GRID_ROW_HEIGHT = 62;
 export const GRID_MARGIN: [number, number] = [2, 2];
 export const GRID_CONTAINER_PADDING: [number, number] = [1, 1];
@@ -19,14 +20,36 @@ export const WIDGET_IDS = {
   chart: "chart",
   positions: "positions",
   watchlist: "watchlist",
+  screener: "screener",
+  portfolio: "portfolio",
+  orders: "orders",
+  details: "details",
+  news: "news",
 } as const;
 
 export type WidgetId = (typeof WIDGET_IDS)[keyof typeof WIDGET_IDS];
+
+/** Minimum footprint in the shared 48-column, 24-row workspace grid. */
+export const WIDGET_MIN_SIZE: Record<WidgetId, { minW: number; minH: number }> = {
+  chart: { minW: 16, minH: 12 },
+  positions: { minW: 10, minH: 6 },
+  watchlist: { minW: 8, minH: 6 },
+  screener: { minW: 16, minH: 8 },
+  portfolio: { minW: 10, minH: 10 },
+  orders: { minW: 14, minH: 6 },
+  details: { minW: 10, minH: 8 },
+  news: { minW: 10, minH: 8 },
+};
 
 export const WIDGET_LABELS: Record<WidgetId, string> = {
   chart: "Grafik",
   positions: "Pozisyonlar",
   watchlist: "Takip Ettiklerim",
+  screener: "Hisse tarayıcı",
+  portfolio: "Portföy",
+  orders: "Emir geçmişi",
+  details: "Varlık detayı",
+  news: "Haberler",
 };
 
 export const ALL_WIDGET_IDS: readonly WidgetId[] = Object.values(WIDGET_IDS);
@@ -60,7 +83,7 @@ export const DEFAULT_LAYOUT: Layout = [
     minW: 2,
     minH: 4,
   },
-];
+].map(item => ({ ...item, x: item.x * 4, w: item.w * 4, minW: item.minW * 4, y: item.y * 2, h: item.h * 2, minH: item.minH * 2 }));
 
 /** Selector for the only element allowed to start a widget drag. */
 export const GRID_DRAG_HANDLE = ".widget-drag-handle";

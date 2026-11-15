@@ -6,13 +6,17 @@ import { Bell, ChevronDown, Search, Plus, Maximize, User, RotateCcw, ChartNoAxes
 import { SYMBOLS } from "@/config/market-symbols";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { requestLayoutReset, selectWatchlist, setSelectedSymbol } from "@/store/slices/terminal-slice";
+import { requestLayoutReset, selectWatchlist, setSelectedSymbol, toggleModule } from "@/store/slices/terminal-slice";
+import { ALL_WIDGET_IDS, WIDGET_LABELS } from "@/config/default-layout";
+import { WorkspaceViews, useViewName } from "./workspace-views";
 
 const MENU_PANEL = "absolute top-full right-2 z-40 overflow-hidden rounded-md border border-terminal-border-strong bg-terminal-elevated shadow-2xl";
 type Menu = "search" | "layout" | "modules" | "account" | "notifications" | null;
 
-export function TerminalHeader() {
+export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
+  const viewName = useViewName();
   const dispatch = useAppDispatch();
+  const visibleModules = useAppSelector(state => state.terminal.visibleModules);
   const [openMenu, setOpenMenu] = useState<Menu>(null);
   const headerRef = useRef<HTMLElement | null>(null);
   const close = useCallback(() => setOpenMenu(null), []);
@@ -40,7 +44,7 @@ export function TerminalHeader() {
           <span className="rounded border border-terminal-accent/40 px-1.5 py-0.5 font-mono text-[12px] font-semibold tracking-tight text-terminal-accent-soft">TL</span>
         </div>
         <button type="button" onClick={() => toggle("layout")} aria-expanded={openMenu === "layout"} className="flex w-28 items-center sm:w-36 gap-2 border-x border-terminal-border bg-white/5 px-2.5 hover:bg-terminal-hover">
-          <span className="flex size-5 items-center justify-center rounded-full bg-black text-[11px]">1</span><span className="truncate">İlk görünüm</span><ChevronDown className="ml-auto size-3 text-terminal-muted"/>
+          <span className="flex size-5 items-center justify-center rounded-full bg-black text-[11px]">1</span><span className="truncate">{viewName}</span><ChevronDown className="ml-auto size-3 text-terminal-muted"/>
         </button>
       </div>
       <div className="flex items-stretch divide-x divide-terminal-border border-l border-terminal-border">
@@ -48,18 +52,21 @@ export function TerminalHeader() {
         <button type="button" onClick={() => toggle("modules")} aria-expanded={openMenu === "modules"} className="flex items-center gap-2 px-3 hover:bg-terminal-hover"><Plus className="size-4"/><span className="hidden sm:inline">Modül ekle</span></button>
         <span title="Emirler simülasyondur" className="hidden items-center gap-2 bg-terminal-up/5 px-3 text-terminal-up lg:flex"><ChartNoAxesCombined className="size-4"/><span className="text-[11px]">Demo portföy</span></span>
         <button type="button" aria-label="Bildirimler" onClick={() => toggle("notifications")} className="px-2.5 hover:bg-terminal-hover"><Bell className="size-4"/></button>
+        <button type="button" onClick={onAlerts} className="px-2.5 text-xs hover:bg-terminal-hover">Alarmlar</button>
         <button type="button" aria-label="Kullanıcı menüsü" onClick={() => toggle("account")} className="px-2.5 hover:bg-terminal-hover"><User className="size-4"/></button>
         <button type="button" aria-label="Tam ekran" onClick={fullscreen} className="px-2.5 hover:bg-terminal-hover"><Maximize className="size-4"/></button>
       </div>
       {openMenu === "search" ? <SearchPalette onSelect={symbol => { dispatch(setSelectedSymbol(symbol)); close(); }}/> : null}
-      {openMenu === "layout" ? <div className={`${MENU_PANEL} left-20 right-auto w-60 p-2`}>
+      {openMenu === "layout" ? <div className={`${MENU_PANEL} left-2 right-auto max-h-[calc(100dvh-48px)] w-72 overflow-y-auto p-2 sm:left-20`}>
         <p className="px-2 py-2 text-terminal-muted">Çalışma alanı</p>
         <button type="button" onClick={() => { dispatch(requestLayoutReset()); close(); }} className="flex w-full items-center gap-2 rounded px-2 py-2 text-left hover:bg-terminal-hover"><RotateCcw className="size-4"/>Varsayılan düzeni yükle</button>
         <p className="px-2 py-2 text-[11px] leading-relaxed text-terminal-muted">Panelleri başlıklarından taşıyabilir, kenarlarından boyutlandırabilirsin.</p>
+        <WorkspaceViews/>
       </div> : null}
       {openMenu === "modules" ? <div className={`${MENU_PANEL} w-64 p-3`}>
-        <p className="mb-3 font-medium">Çalışma alanındaki modüller</p>
-        {["Fiyat grafiği", "Pozisyonlar", "Takip Ettiklerim"].map(label => <button key={label} type="button" onClick={() => { document.querySelector<HTMLElement>(`section[aria-label="${label}"]`)?.focus(); close(); }} className="flex w-full items-center gap-2 border-t border-terminal-border py-3 text-left hover:text-terminal-accent-soft"><LayoutGrid className="size-4"/>{label}<span className="ml-auto text-[10px] text-terminal-muted">Eklendi</span></button>)}
+        <p className="mb-3 font-medium">Modüller</p>
+        {ALL_WIDGET_IDS.map(id => <button key={id} type="button" aria-pressed={visibleModules.includes(id)} onClick={() => dispatch(toggleModule(id))} className="flex w-full items-center gap-2 border-t border-terminal-border py-3 text-left hover:text-terminal-accent-soft"><LayoutGrid className="size-4"/>{WIDGET_LABELS[id]}<span className="ml-auto text-[10px] text-terminal-muted">{visibleModules.includes(id) ? "Kaldır" : "Ekle"}</span></button>)}
+        <p className="pt-2 text-[10px] text-terminal-muted">Panelleri ızgarada taşı, üst üste yerleştir. Tıkladığın panel öne gelir.</p>
       </div> : null}
       {openMenu === "account" || openMenu === "notifications" ? <div className={`${MENU_PANEL} w-64 p-4`}><p className="mb-2 font-medium">{openMenu === "account" ? "Terminal Lab · Demo çalışma alanı" : "Bildirimler"}</p><p className="text-[12px] leading-relaxed text-terminal-muted">{openMenu === "account" ? "Bağımsız portföy projesi. Midas ile bağlantılı değildir. Tüm emirler simülasyondur. Canlı fiyatlar yalnızca yerel değerlendirme için ayrıca etkinleştirilebilir." : "Henüz bir bildirimin bulunmuyor."}</p></div> : null}
     </header>

@@ -74,21 +74,22 @@
   -webkit-user-drag: none;
 }
 
-.react-grid-item.react-grid-placeholder {
-  background: var(--color-terminal-accent);
-  opacity: 0.16;
-  border-radius: 10px;
-  transition-duration: 100ms;
+.react-grid-layout .react-grid-item.react-grid-placeholder {
+  /* Never expose the library's default red drop-target ghost. */
+  background: transparent !important;
+  opacity: 0 !important;
+  visibility: hidden;
 }
 
 .react-grid-item.react-draggable-dragging,
 .react-grid-item.resizing {
-  z-index: 30;
+  /* The widget's interaction-managed inline z-index owns the stacking order. */
+  will-change: transform;
 }
 
 .react-grid-item.react-draggable-dragging .widget-frame {
-  border-color: var(--color-terminal-accent);
-  box-shadow: 0 18px 40px -12px rgb(0 0 0 / 0.75);
+  border-color: var(--color-terminal-border);
+  box-shadow: none;
 }
 
 /*
@@ -124,6 +125,32 @@
   opacity: 1;
 }
 
+/* Edge hit areas span the side; corners take precedence at their intersections. */
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-n, .react-resizable-handle-s) {
+  left: 14px;
+  right: 14px;
+  width: auto;
+  height: 8px;
+  margin: 0;
+  transform: none;
+  cursor: ns-resize;
+}
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-e, .react-resizable-handle-w) {
+  top: 14px;
+  bottom: 14px;
+  height: auto;
+  width: 8px;
+  margin: 0;
+  transform: none;
+  cursor: ew-resize;
+}
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-n, .react-resizable-handle-ne, .react-resizable-handle-nw) { top: 0; }
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-s, .react-resizable-handle-se, .react-resizable-handle-sw) { bottom: 0; }
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-w, .react-resizable-handle-nw, .react-resizable-handle-sw) { left: 0; }
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-e, .react-resizable-handle-ne, .react-resizable-handle-se) { right: 0; }
+.react-grid-layout .react-grid-item > :is(.react-resizable-handle-ne, .react-resizable-handle-nw, .react-resizable-handle-se, .react-resizable-handle-sw) { z-index: 5; }
+.react-grid-layout .react-grid-item > .react-resizable-handle:not(.react-resizable-handle-se)::after { display: none; }
+
 .widget-frame {
   background-image: linear-gradient(170deg, rgb(247 248 250 / 0.065), transparent 14%);
 }
@@ -133,3 +160,34 @@ button { cursor: pointer; }
 
 .chart-panel > header { height: 85px; position: relative; padding-inline: 10px; overflow: visible; }
 .chart-panel > header > .widget-no-drag { position: absolute; right: 6px; top: 10px; }
+
+/* Match the compact reference drawing rail; only its contents may scroll. */
+.drawing-rail-scroll { scrollbar-width: none; overscroll-behavior: contain; }
+.drawing-rail-scroll::-webkit-scrollbar { display: none; }
+.drawing-rail-button,
+.drawing-rail-scroll > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 3px;
+  color: var(--color-terminal-text);
+  background: transparent;
+}
+.drawing-rail-button:hover,
+.drawing-rail-scroll > button:hover { background: var(--color-terminal-hover); }
+.drawing-rail-button[aria-pressed="true"],
+.drawing-rail-scroll > button[aria-pressed="true"] { background: var(--color-terminal-text); color: var(--color-terminal-bg); }
+.drawing-rail-scroll > button:disabled { opacity: 0.5; }
+
+.widget-menu-item { display: flex; width: 100%; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 4px; text-align: left; }
+.widget-menu-item:hover, .widget-menu-item:focus-visible { background: var(--color-terminal-hover); outline: none; }
+.widget-frame [hidden] { display: none !important; }
+.widget-frame[data-compact="true"] [data-search-symbol] { padding-block: 3px; font-size: 11px; }
+.widget-frame[data-compact="true"] [data-widget-body] td { padding-block: 3px; }
+.widget-frame[data-show-names="false"] [data-search-symbol] .text-terminal-muted.text-\[10px\],
+.widget-frame[data-show-names="false"] [data-search-symbol] .text-\[10px\].text-terminal-muted { display: none; }
+.widget-frame[data-show-names="false"] [data-company-name] { display: none; }

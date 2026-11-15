@@ -90,6 +90,7 @@ export function PositionsWidget({ api }: PositionsWidgetProps) {
                 <div
                   title={getSymbolInfo(row.symbol).currency}
                   key={row.id}
+                  data-search-symbol={row.symbol}
                   className="group grid grid-cols-[1.1fr_0.7fr_1fr_0.9fr_auto] items-center gap-1 border-b border-terminal-border/60 px-3 py-1.5 hover:bg-terminal-hover/60"
                 >
                   <span className="truncate text-[11.5px] font-semibold text-terminal-text">

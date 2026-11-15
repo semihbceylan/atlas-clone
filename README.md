@@ -21,15 +21,40 @@ Open http://localhost:3000. The default mode works without an API key or environ
 
 ## What to try
 
+- Save/load named workspace views from the view selector. Create, rename, switch, and delete persistent watchlists; filter by market and sort by symbol or change.
+- Open **Alarmlar** to add local price thresholds and inspect triggered history. Only the selected chart is monitored while the page remains open; these are not brokerage/server alarms.
+- Switch between eight chart types, normal/log/percentage scales, grid visibility, and configurable SMA/EMA overlays.
+- Save screener presets, set reference-price bounds, toggle the price column, and filter/paginate simulated order history.
+- Add **Haberler** to import your own article JSON, search it, and filter by the selected symbol. No live news provider is connected.
+
+See [Atlas feature comparison and remaining gaps](docs/atlas-feature-parity.md) for the precise scope and limitations. This project does **not** implement every Atlas feature.
+
+### Edit existing chart drawings
+
+Click a line or shape (including a shape's interior), or right-click it, to open **Çizim özellikleri**. Drag in edit mode to move the object or its endpoint handles. Click an empty area or close the properties panel to return to chart navigation.
+
+- Change line color, thickness, solid/dashed/dotted style, and opacity.
+- Change shape fill color/opacity and annotation text/font size.
+- Use **Koordinatlar** to apply exact Unix-time/price anchors.
+- Duplicate, bring forward/send backward, hide/show, lock/unlock, or delete an individual drawing.
+- Use **Çizim nesneleri** to select hidden or off-screen objects. Locked objects cannot be dragged, edited, erased, or deleted until unlocked; bulk clear preserves them.
+- Delete/Backspace removes an unlocked selection when focus is on the chart. Escape cancels/deselects. Undo/redo covers drawing edits. Appearance and object state persist per symbol alongside the geometry.
+
 - Search instruments with **⌘K / Ctrl+K**, then select a symbol.
 - Switch candle intervals and toggle volume or the last-price line.
 - Add symbols to the watchlist and select them to update the chart.
 - Use **Al / Sat** to create simulated positions; close them from the positions panel.
-- Drag desktop panels by their headers and resize them from their edges. Layout changes persist locally.
+- Drag panels by their headers on the fine grid, overlap them freely, and resize them from their edges. Clicking or focusing a widget brings it to the front. Layout changes persist locally.
+- Resize from any of the four edges or four corners. Each module has its own minimum grid width/height, enforced for both resizing and restored layouts. Dragging has no colored placeholder or shadow.
 - Open the workspace menu to restore the default arrangement.
-- Narrow the window to stack the panels; use chart or workspace fullscreen controls.
+- The workspace stays within the viewport with no canvas/page scrolling, including on narrow screens. Individual widget contents can scroll. Use chart or workspace fullscreen controls for more room.
+- Use **Modül ekle** to add/remove the screener, portfolio, simulated order history, and instrument details. New panels appear as overlapping windows inside the workspace.
+- Every module has a three-dot menu: export panel text as TXT, restore default size, fill the workspace, duplicate, or remove. Duplicates have independent placement/size and share demo data and symbol selection. Copies persist across reloads (up to 30 total panels).
+- Header controls include module icons, local visual color tags, symbol search for watchlist/positions/orders, and compact view. Company-name visibility is available on the watchlist, screener, and details panels. View and color preferences are session-only; colors do not change symbol linking.
+- Click a drawing icon to arm its last-used tool; the small arrow shown on hover/focus opens its tool menu. Draw by dragging (click for horizontal/vertical lines and text). The compact lower editing bar contains **Çizimleri düzenle**, the pointer, eraser, undo/redo, and color. Esc returns to chart navigation.
+- Try Fibonacci retracements/projections/fans/time zones, a simplified Gann grid/fan, ranges, arrows, shapes, text, and freehand drawing. Toggle repeat-drawing mode, OHLC magnet snapping, visibility, favorites, or color; undo/redo and erase annotations.
 
-Watchlists and positions reset on reload. Only the workspace layout is persisted.
+Watchlists, positions, and simulated order history reset on reload. Workspace layout, visible modules, and per-symbol drawings are persisted in this browser. Drawing undo/redo history and toolbar preferences are session-only.
 
 ## WebSocket integration
 
@@ -71,7 +96,7 @@ Key implementation files:
 - [Responsive, persistent dashboard](src/components/terminal/dashboard-grid.tsx)
 - [WebSocket tests](src/lib/market/create-coinbase-feed.test.ts)
 
-Drawing-tool selection is demonstrated, but annotation drawing is not implemented. Only the active instrument streams; unselected crypto watchlist rows show a dash. Simulated position accounting omits fees, slippage, and currency conversion. There is no login, real order execution, or backend account storage. The module menu lists the three implemented modules rather than creating additional widget instances.
+Only the active instrument streams; unselected crypto watchlist rows show a dash. The screener uses a small local catalogue and explicitly labeled reference prices, not live screening data. Portfolio totals are separated by currency, with inactive positions valued at cost. Simulated position accounting omits fees, slippage, and currency conversion. Order history supports CSV export. The common “Dışarıya al” action exports text rather than opening a detached Atlas window; it does not export chart canvas imagery. Drawing anchors use time/price coordinates and reproject with the chart; trend channels and Gann/Fibonacci tools are simplified two-anchor studies, not a full professional charting engine. Curves/arcs, spirals, pitchforks, Elliott waves, real news, fundamentals, options/derivatives chains, login, real execution, and backend storage are not implemented.
 
 ## Checks
 
@@ -86,12 +111,14 @@ Browser checks with Playwright (Chromium):
 
 ```bash
 npx playwright install chromium
-npm run test:e2e  # starts a local production build when no server is running
+npm run test:e2e  # builds and starts an isolated production server on port 3100
 # Check the public deployment without starting a local server:
 PLAYWRIGHT_BASE_URL=https://atlas-clone-flax.vercel.app npm run test:e2e
 ```
 
-GitHub Actions runs typechecking, lint, market tests, and the production build. Playwright checks are available through the separate browser-test command above. The market suite contains 20 tests. Three Playwright checks cover public-demo notices and socket behavior, simulated trading and chart controls, and mobile layout. Browser checks covered simulated orders, symbol changes, interval changes, indicators, connection status, and viewport overflow.
+Development uses `.next-local` while production uses `.next`, keeping test builds separate from the running development server. Generated output is excluded from lint.
+
+GitHub Actions runs typechecking, lint, unit tests, and the production build. Playwright checks are available through the separate browser-test command above. The unit suite contains 43 tests covering market feeds, drawing validation/measurements, module state, simulated fills, layout minimums, watchlists, alerts, and indicators. Eighteen Playwright checks cover public-demo notices and socket behavior, simulated trading and chart controls, fixed mobile layout, drawing persistence/editing/undo, module search/view controls, shared menus, duplicate persistence, all eight resize directions, overlapping placement/stacking/bounds/persistence, saved views, named watchlists, chart types, alarms, and safe news import. Toolbar dimensions are checked against the reference measurements.
 
 ## Copyright, attribution, and data rights
 
