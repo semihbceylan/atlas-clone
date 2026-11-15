@@ -4,6 +4,8 @@ An independent frontend portfolio study inspired by [Midas Atlas](https://atlas.
 
 **This is not an official Midas product. It is not affiliated with, endorsed by, or sponsored by Midas.** The app uses neutral Terminal Lab branding. Midas and Atlas are referenced only to acknowledge the design inspiration. No Midas application source, logos, reference screenshots, proprietary fonts, account information, or customer data are included.
 
+[Live portfolio demo](https://atlas-clone-flax.vercel.app/) · [GitHub repository](https://github.com/semihbceylan/atlas-clone)
+
 All orders are simulated. The default demo generates its prices locally and does not connect to a brokerage or require credentials.
 
 ## Run locally
@@ -80,7 +82,16 @@ npm test
 npm run build
 ```
 
-GitHub Actions runs the same checks. The market suite contains 20 tests. Browser checks covered simulated orders, symbol changes, interval changes, indicators, connection status, and viewport overflow.
+Browser checks with Playwright (Chromium):
+
+```bash
+npx playwright install chromium
+npm run test:e2e  # starts a local production build when no server is running
+# Check the public deployment without starting a local server:
+PLAYWRIGHT_BASE_URL=https://atlas-clone-flax.vercel.app npm run test:e2e
+```
+
+GitHub Actions runs typechecking, lint, market tests, and the production build. Playwright checks are available through the separate browser-test command above. The market suite contains 20 tests. Three Playwright checks cover public-demo notices and socket behavior, simulated trading and chart controls, and mobile layout. Browser checks covered simulated orders, symbol changes, interval changes, indicators, connection status, and viewport overflow.
 
 ## Copyright, attribution, and data rights
 
