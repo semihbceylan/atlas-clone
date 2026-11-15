@@ -30,7 +30,6 @@ export function ChartHeader({ symbol, symbolName, quote, candle, isHovering, onB
   return (
     <div className="min-w-0 flex-1 self-stretch">
       <div className="flex h-11 items-center gap-3 pr-16">
-        <span aria-hidden className="size-2 shrink-0 rounded-full border border-terminal-muted"/>
         <button type="button" onClick={() => window.dispatchEvent(new Event("atlas:search"))} title={symbolName} className="widget-no-drag flex min-w-0 items-center gap-2 text-left hover:text-terminal-accent-soft">
           <span className="text-[16px] font-medium">{symbol}</span><span className="text-[11px] text-terminal-muted">{currency}</span><ChevronDown className="size-3 text-terminal-muted"/>
         </button>

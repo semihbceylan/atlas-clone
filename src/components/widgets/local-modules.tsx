@@ -83,7 +83,7 @@ export function PortfolioWidget({ api }: { api: LiveMarketApi }) {
       const rows = positions.filter(position => getSymbolInfo(position.symbol).currency === currency);
       const cost = rows.reduce((sum, row) => sum + row.averagePrice * row.quantity, 0);
       const value = rows.reduce((sum, row) => sum + (row.symbol === symbol && quote.price ? quote.price : row.averagePrice) * row.quantity, 0);
-      return <div key={currency} className="mb-3 rounded border border-terminal-border p-3"><p className="text-xs text-terminal-muted">{currency} · {rows.length} pozisyon</p><p className="my-2 text-xl tabular-nums">{number(value)} {currency}</p><p className={value - cost >= 0 ? "text-terminal-up" : "text-terminal-down"}>Gerçekleşmemiş K/Z: {number(value - cost)} {currency}</p></div>;
+      return <div key={currency} className="mb-3 rounded border border-terminal-border p-3"><p className="text-xs text-terminal-muted">{currency} · {rows.length} pozisyon</p><p data-sensitive className="my-2 text-xl tabular-nums">{number(value)} {currency}</p><p data-sensitive className={value - cost >= 0 ? "text-terminal-up" : "text-terminal-down"}>Gerçekleşmemiş K/Z: {number(value - cost)} {currency}</p></div>;
     })}
   </WidgetFrame>;
 }

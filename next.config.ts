@@ -6,7 +6,7 @@ const nextConfig = (phase: string): NextConfig => ({
   distDir: phase === PHASE_DEVELOPMENT_SERVER ? ".next-local" : ".next",
   /* config options here */
   experimental: {
-    agentFeedback: true,
+    agentFeedback: false,
   },
   cacheComponents: true,
   partialPrefetching: true,

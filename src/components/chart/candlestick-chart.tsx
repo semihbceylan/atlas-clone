@@ -4,6 +4,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import { DrawingOverlay, type DrawingChart } from "@/components/chart/drawing-overlay";
 import type { ChartTool, Drawing } from "@/lib/chart/drawings";
 import { movingAverage, heikinAshi, type ChartType } from "@/lib/chart/indicators";
+import { useAppSelector } from "@/store/hooks";
 import {
   CandlestickSeries,
   ColorType,
@@ -50,7 +51,6 @@ import type { CandleEvent, LiveMarketApi } from "@/hooks/use-live-candles";
 const UP_COLOR = "#16c784";
 const DOWN_COLOR = "#ef4453";
 const AXIS_TEXT = "#9b9ca8";
-const PANEL_BACKGROUND = "#121319";
 const GRID_LINE = "rgba(255, 255, 255, 0.035)";
 const CROSSHAIR_LINE = "rgba(139, 148, 170, 0.45)";
 const CROSSHAIR_LABEL = "#2a303c";
@@ -128,6 +128,7 @@ export const CandlestickChart = memo(function CandlestickChart({
   drawing,
   chartType, scaleMode, showGrid, average, averagePeriod,
 }: CandlestickChartProps) {
+  const lightTheme = useAppSelector(state => state.terminal.preferences.lightTheme);
   const [drawingHandles, setDrawingHandles] = useState<DrawingChart | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const handlesRef = useRef<ChartHandles | null>(null);
@@ -158,7 +159,7 @@ export const CandlestickChart = memo(function CandlestickChart({
       width: Math.max(container.clientWidth, 1),
       height: Math.max(container.clientHeight, 1),
       layout: {
-        background: { type: ColorType.Solid, color: PANEL_BACKGROUND },
+        background: { type: ColorType.Solid, color: "transparent" },
         textColor: AXIS_TEXT,
         fontSize: 11,
         fontFamily: "Arial, sans-serif",
@@ -325,6 +326,16 @@ export const CandlestickChart = memo(function CandlestickChart({
   }, [api]);
 
   // --- Options that change without touching data -----------------------------
+  useEffect(() => {
+    const borderColor = lightTheme ? "#dce0e9" : "#1d212a";
+    const labelBackgroundColor = lightTheme ? "#606779" : CROSSHAIR_LABEL;
+    handlesRef.current?.chart.applyOptions({
+      layout: { background: { type: ColorType.Solid, color: "transparent" }, textColor: lightTheme ? "#606779" : AXIS_TEXT },
+      grid: { vertLines: { color: lightTheme ? "#e9eaf2" : GRID_LINE }, horzLines: { color: lightTheme ? "#e9eaf2" : GRID_LINE } },
+      rightPriceScale: { borderColor }, timeScale: { borderColor },
+      crosshair: { vertLine: { labelBackgroundColor }, horzLine: { labelBackgroundColor } },
+    });
+  }, [lightTheme]);
   useEffect(() => {
     handlesRef.current?.volumeSeries.applyOptions({ visible: showVolume });
   }, [showVolume]);

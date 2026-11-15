@@ -96,13 +96,13 @@ export function PositionsWidget({ api }: PositionsWidgetProps) {
                   <span className="truncate text-[11.5px] font-semibold text-terminal-text">
                     {row.symbol}
                   </span>
-                  <span className="text-right font-mono text-[11px] tabular-nums text-terminal-muted">
+                  <span data-sensitive className="text-right font-mono text-[11px] tabular-nums text-terminal-muted">
                     {row.quantity}
                   </span>
                   <span className="text-right font-mono text-[11px] tabular-nums text-terminal-muted">
                     {formatPrice(row.averagePrice, { suffix: "" })}
                   </span>
-                  <span
+                  <span data-sensitive
                     className={`text-right font-mono text-[11px] tabular-nums ${
                       pnl > 0 ? "text-terminal-up" : pnl < 0 ? "text-terminal-down" : "text-terminal-muted"
                     }`}

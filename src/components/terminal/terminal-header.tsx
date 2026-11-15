@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Bell, ChevronDown, Search, Plus, Maximize, User, RotateCcw, ChartNoAxesCombined, LayoutGrid } from "lucide-react";
+import { AlarmClock, Bell, ChevronDown, Search, Plus, Maximize, User, RotateCcw, ChartNoAxesCombined, LayoutGrid } from "lucide-react";
 import { SYMBOLS } from "@/config/market-symbols";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { requestLayoutReset, selectWatchlist, setSelectedSymbol, toggleModule } from "@/store/slices/terminal-slice";
 import { ALL_WIDGET_IDS, WIDGET_LABELS } from "@/config/default-layout";
 import { WorkspaceViews, useViewName } from "./workspace-views";
+import { UserMenu } from "./user-menu";
 
 const MENU_PANEL = "absolute top-full right-2 z-40 overflow-hidden rounded-md border border-terminal-border-strong bg-terminal-elevated shadow-2xl";
 type Menu = "search" | "layout" | "modules" | "account" | "notifications" | null;
@@ -20,7 +21,7 @@ export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
   const [openMenu, setOpenMenu] = useState<Menu>(null);
   const headerRef = useRef<HTMLElement | null>(null);
   const close = useCallback(() => setOpenMenu(null), []);
-  useClickOutside(headerRef, openMenu !== null, close);
+  useClickOutside(headerRef, openMenu !== null && openMenu !== "account", close);
   useEffect(() => {
     const openSearch = () => setOpenMenu("search");
     const onKey = (event: KeyboardEvent) => {
@@ -38,13 +39,13 @@ export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
     void action.catch(() => {});
   };
   return (
-    <header ref={headerRef} className="workspace-nav relative z-30 flex h-9 shrink-0 items-stretch justify-between border-b border-terminal-border bg-[#1c1d27]/80 text-[13px]">
+    <header ref={headerRef} className="workspace-nav relative z-30 flex h-9 shrink-0 items-stretch justify-between border-b border-terminal-border bg-terminal-nav text-[13px]">
       <div className="flex min-w-0 items-stretch">
         <div aria-label="Terminal Lab — independent portfolio project" className="flex w-12 shrink-0 items-center justify-center sm:w-20" title="Terminal Lab · Portfolio demo">
           <span className="rounded border border-terminal-accent/40 px-1.5 py-0.5 font-mono text-[12px] font-semibold tracking-tight text-terminal-accent-soft">TL</span>
         </div>
-        <button type="button" onClick={() => toggle("layout")} aria-expanded={openMenu === "layout"} className="flex w-28 items-center sm:w-36 gap-2 border-x border-terminal-border bg-white/5 px-2.5 hover:bg-terminal-hover">
-          <span className="flex size-5 items-center justify-center rounded-full bg-black text-[11px]">1</span><span className="truncate">{viewName}</span><ChevronDown className="ml-auto size-3 text-terminal-muted"/>
+        <button type="button" onClick={() => toggle("layout")} aria-expanded={openMenu === "layout"} className="flex w-28 items-center sm:w-36 gap-2 border-x border-terminal-border bg-terminal-panel-alt px-2.5 hover:bg-terminal-hover">
+          <span className="flex size-5 items-center justify-center rounded-full bg-terminal-bg text-[11px]">1</span><span className="truncate">{viewName}</span><ChevronDown className="ml-auto size-3 text-terminal-muted"/>
         </button>
       </div>
       <div className="flex items-stretch divide-x divide-terminal-border border-l border-terminal-border">
@@ -52,8 +53,8 @@ export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
         <button type="button" onClick={() => toggle("modules")} aria-expanded={openMenu === "modules"} className="flex items-center gap-2 px-3 hover:bg-terminal-hover"><Plus className="size-4"/><span className="hidden sm:inline">Modül ekle</span></button>
         <span title="Emirler simülasyondur" className="hidden items-center gap-2 bg-terminal-up/5 px-3 text-terminal-up lg:flex"><ChartNoAxesCombined className="size-4"/><span className="text-[11px]">Demo portföy</span></span>
         <button type="button" aria-label="Bildirimler" onClick={() => toggle("notifications")} className="px-2.5 hover:bg-terminal-hover"><Bell className="size-4"/></button>
-        <button type="button" onClick={onAlerts} className="px-2.5 text-xs hover:bg-terminal-hover">Alarmlar</button>
-        <button type="button" aria-label="Kullanıcı menüsü" onClick={() => toggle("account")} className="px-2.5 hover:bg-terminal-hover"><User className="size-4"/></button>
+        <button type="button" onClick={onAlerts} className="flex items-center gap-2 px-2.5 text-xs hover:bg-terminal-hover"><AlarmClock aria-hidden className="size-4"/>Alarmlar</button>
+        <button type="button" aria-label="Kullanıcı menüsü" aria-haspopup="dialog" aria-expanded={openMenu === "account"} onClick={() => toggle("account")} className="px-2.5 hover:bg-terminal-hover"><User className="size-4"/></button>
         <button type="button" aria-label="Tam ekran" onClick={fullscreen} className="px-2.5 hover:bg-terminal-hover"><Maximize className="size-4"/></button>
       </div>
       {openMenu === "search" ? <SearchPalette onSelect={symbol => { dispatch(setSelectedSymbol(symbol)); close(); }}/> : null}
@@ -68,7 +69,8 @@ export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
         {ALL_WIDGET_IDS.map(id => <button key={id} type="button" aria-pressed={visibleModules.includes(id)} onClick={() => dispatch(toggleModule(id))} className="flex w-full items-center gap-2 border-t border-terminal-border py-3 text-left hover:text-terminal-accent-soft"><LayoutGrid className="size-4"/>{WIDGET_LABELS[id]}<span className="ml-auto text-[10px] text-terminal-muted">{visibleModules.includes(id) ? "Kaldır" : "Ekle"}</span></button>)}
         <p className="pt-2 text-[10px] text-terminal-muted">Panelleri ızgarada taşı, üst üste yerleştir. Tıkladığın panel öne gelir.</p>
       </div> : null}
-      {openMenu === "account" || openMenu === "notifications" ? <div className={`${MENU_PANEL} w-64 p-4`}><p className="mb-2 font-medium">{openMenu === "account" ? "Terminal Lab · Demo çalışma alanı" : "Bildirimler"}</p><p className="text-[12px] leading-relaxed text-terminal-muted">{openMenu === "account" ? "Bağımsız portföy projesi. Midas ile bağlantılı değildir. Tüm emirler simülasyondur. Canlı fiyatlar yalnızca yerel değerlendirme için ayrıca etkinleştirilebilir." : "Henüz bir bildirimin bulunmuyor."}</p></div> : null}
+      {openMenu === "account" ? <UserMenu onClose={close}/> : null}
+      {openMenu === "notifications" ? <div className={`${MENU_PANEL} w-64 p-4`}><p className="mb-2 font-medium">Bildirimler</p><p className="text-[12px] leading-relaxed text-terminal-muted">Henüz bir bildirimin bulunmuyor.</p></div> : null}
     </header>
   );
 }

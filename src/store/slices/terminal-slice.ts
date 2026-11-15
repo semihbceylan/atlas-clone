@@ -27,6 +27,7 @@ export type DrawingTool =
   | "eraser";
 
 export interface TerminalState {
+  preferences: { lightTheme: boolean; hideAmounts: boolean };
   visibleModules: WidgetId[];
   orders: { id: string; symbol: string; quantity: number; price: number; createdAt: string }[];
   /** Symbol currently loaded in the chart. */
@@ -60,6 +61,7 @@ export interface TerminalState {
 }
 
 const initialState: TerminalState = {
+  preferences: { lightTheme: false, hideAmounts: false },
   visibleModules: ["chart", "positions", "watchlist"],
   orders: [],
   selectedSymbol: DEFAULT_SYMBOL,
@@ -81,6 +83,9 @@ const terminalSlice = createSlice({
   name: "terminal",
   initialState,
   reducers: {
+    setPreference(state, action: PayloadAction<{ key: "lightTheme" | "hideAmounts"; value: boolean }>) {
+      state.preferences[action.payload.key] = action.payload.value;
+    },
     restoreWatchlists(state, action: PayloadAction<unknown>) {
       const value = action.payload as { lists?: unknown; active?: unknown } | null;
       if (!value || !Array.isArray(value.lists)) return;
@@ -210,6 +215,7 @@ export const {
   requestLayoutReset,
   toggleModule,
   restoreModules,
+  setPreference,
   restoreWatchlists, createWatchlist, selectWatchlistById, renameWatchlist, deleteWatchlist,
 } = terminalSlice.actions;
 

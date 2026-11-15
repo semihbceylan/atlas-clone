@@ -6,6 +6,22 @@ import { useWidgetContext } from "./widget-context";
 import { Popover } from "./popover";
 import { IconButton } from "./icon-button";
 import { WIDGET_LABELS } from "@/config/default-layout";
+import { Circle, Diamond, Hexagon, Pentagon, Square, Triangle, Check } from "lucide-react";
+
+const VISUAL_TAGS = [
+  { id: "blue", label: "Mavi", color: "#4959ea", icon: Square },
+  { id: "orange", label: "Turuncu", color: "#db8928", icon: Diamond },
+  { id: "purple", label: "Mor", color: "#b84af0", icon: Hexagon },
+  { id: "cyan", label: "Turkuaz", color: "#20a9e5", icon: Triangle },
+  { id: "green", label: "Yeşil", color: "#8ab215", icon: Pentagon },
+  { id: "pink", label: "Pembe", color: "#f26891", icon: Circle },
+  { id: "independent", label: "Bağımsız", color: "#737582", icon: Square },
+] as const;
+
+function VisualTagIcon({ tag }: { tag: typeof VISUAL_TAGS[number] }) {
+  const Shape = tag.icon;
+  return <Shape aria-hidden className="size-4 shrink-0" style={{ color: tag.color, fill: tag.id === "independent" ? "none" : tag.color, stroke: tag.id === "independent" ? tag.color : `color-mix(in srgb, ${tag.color} 80%, white 20%)`, strokeWidth: 1.5 }}/>;
+}
 
 const MODULE_ICONS = { chart: ChartCandlestick, watchlist: List, positions: BriefcaseBusiness, screener: ScanSearch, portfolio: ChartPie, orders: History, details: Info, news: Newspaper };
 
@@ -45,7 +61,8 @@ export function WidgetFrame({
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [showNames, setShowNames] = useState(true);
-  const [linkColor, setLinkColor] = useState("#737582");
+  const [tagId, setTagId] = useState<string>("blue");
+  const tag = VISUAL_TAGS.find(item => item.id === tagId) ?? VISUAL_TAGS[0];
   const [colorOpen, setColorOpen] = useState(false);
   const anchor = useRef<HTMLDivElement>(null);
   const colorAnchor = useRef<HTMLDivElement>(null);
@@ -74,12 +91,16 @@ export function WidgetFrame({
       aria-label={ariaLabel ?? (typeof title === "string" ? title : undefined)}
       data-compact={compact}
       data-show-names={showNames}
-      className={`widget-frame flex h-full min-h-0 flex-col overflow-hidden rounded-[2px] border border-terminal-border bg-terminal-panel ${className}`}
+      className={`widget-frame flex h-full min-h-0 flex-col overflow-hidden rounded-[2px] border border-terminal-border ${className}`}
     >
       <header className="widget-drag-handle flex h-10 shrink-0 cursor-grab items-center gap-2.5 border-b border-terminal-border px-3 select-none active:cursor-grabbing">
         <div ref={colorAnchor} className="widget-no-drag shrink-0">
-          <button type="button" aria-label={`${label} bağlantı rengi`} title="Modül rengi (yerel görsel etiket)" aria-expanded={colorOpen} onClick={() => setColorOpen(!colorOpen)} className="flex size-6 items-center justify-center rounded hover:bg-terminal-hover"><span className="size-2 rounded-full border" style={{ borderColor: linkColor, background: linkColor === "#737582" ? "transparent" : linkColor }}/></button>
-          {colorOpen ? <Popover anchorRef={colorAnchor} onClose={() => setColorOpen(false)} role="dialog" ariaLabel="Modül rengi" className="z-[100] rounded border border-terminal-border bg-terminal-elevated p-3 shadow-xl"><p className="mb-2 text-[11px] text-terminal-muted">Görsel etiket · Sembol bağlantısını değiştirmez</p><div className="flex gap-2">{["#737582", "#7165ff", "#16c784", "#ef4453", "#f5bd4f", "#48a9f8"].map(color => <button key={color} aria-label={`Renk ${color}`} onClick={() => { setLinkColor(color); setColorOpen(false); }} className="size-5 rounded-full border border-white/20" style={{ background: color }}/>)}</div></Popover> : null}
+          <button type="button" aria-label={`${label} bağlantı rengi`} title={`Görsel etiket: ${tag.label}`} aria-haspopup="dialog" aria-expanded={colorOpen} onClick={() => setColorOpen(!colorOpen)} className="flex size-6 items-center justify-center rounded-full hover:bg-terminal-hover"><VisualTagIcon tag={tag}/></button>
+          {colorOpen ? <Popover anchorRef={colorAnchor} align="start" onClose={() => setColorOpen(false)} role="dialog" ariaLabel="Modül rengi" className="z-[100] w-60 rounded-lg border border-terminal-border bg-terminal-elevated p-2 shadow-xl">
+            <h3 className="px-2 py-2 text-sm font-medium">Görsel etiketler</h3>
+            <p className="px-2 pb-2 text-[11px] text-terminal-muted">Sembol bağlantısını değiştirmez.</p>
+            <div className="flex flex-col gap-0.5">{VISUAL_TAGS.map(item => <button key={item.id} type="button" aria-label={item.id === "independent" ? item.label : `Renk: ${item.label}`} aria-pressed={tagId === item.id} onClick={() => { setTagId(item.id); setColorOpen(false); }} className={`flex w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm hover:bg-terminal-hover ${tagId === item.id ? "bg-terminal-hover" : ""} ${item.id === "independent" ? "mt-1 border-t border-terminal-border" : ""}`}><VisualTagIcon tag={item}/><span className="flex-1">{item.label}</span>{tagId === item.id ? <Check aria-hidden className="size-3.5 text-terminal-muted"/> : null}</button>)}</div>
+          </Popover> : null}
         </div>
         {typeof title === "string" ? (
           <><Icon aria-hidden className="size-3.5 shrink-0 text-terminal-muted"/><h2 className="truncate text-[13px] font-medium text-terminal-text">{title}</h2></>

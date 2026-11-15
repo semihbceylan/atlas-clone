@@ -35,7 +35,7 @@ const LEGEND: readonly LegendItem[] = [
  */
 export function ChartFooter({ crosshairSnapped, onToggleSnap, status, timeframe, onTimeframeChange, isHovering }: ChartFooterProps) {
   return (
-    <div className="flex h-8 shrink-0 items-center gap-3 border-t border-terminal-border bg-terminal-panel px-2">
+    <div className="flex h-8 shrink-0 items-center gap-3 border-t border-terminal-border px-2">
       <div role="group" aria-label="Zaman aralığı" className="flex items-center gap-0.5">
         {TIMEFRAMES.map((option) => (
           <button

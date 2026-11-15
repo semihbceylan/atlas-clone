@@ -4,7 +4,7 @@ import { Provider } from "react-redux";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
 import { store } from "@/store";
-import { restoreModules, restoreWatchlists } from "@/store/slices/terminal-slice";
+import { restoreModules, restoreWatchlists, setPreference } from "@/store/slices/terminal-slice";
 
 /**
  * Client boundary for Redux.
@@ -19,6 +19,10 @@ export function ReduxProvider({ children }: { children: ReactNode }) {
     const key = "terminal-lab.modules.v1";
     try { const saved = localStorage.getItem(key); if (saved) store.dispatch(restoreModules(JSON.parse(saved))); } catch { /* Optional browser storage. */ }
     try { const saved = localStorage.getItem("terminal-lab.watchlists.v1"); if (saved) store.dispatch(restoreWatchlists(JSON.parse(saved))); } catch { /* Optional browser storage. */ }
+    try { const saved = JSON.parse(localStorage.getItem("terminal-lab.preferences.v1") ?? "{}"); for (const key of ["lightTheme", "hideAmounts"] as const) if (typeof saved[key] === "boolean") store.dispatch(setPreference({ key, value: saved[key] })); } catch { /* Optional browser storage. */ }
+    const syncPreferences = () => { const prefs = store.getState().terminal.preferences; document.documentElement.dataset.theme = prefs.lightTheme ? "light" : "dark"; document.documentElement.dataset.hideAmounts = String(prefs.hideAmounts); };
+    syncPreferences();
+    let previousPreferences = store.getState().terminal.preferences;
     let previous = store.getState().terminal.visibleModules;
     let previousLists = store.getState().terminal.watchlists;
     let previousItems = store.getState().terminal.watchlist;
@@ -26,6 +30,10 @@ export function ReduxProvider({ children }: { children: ReactNode }) {
     return store.subscribe(() => {
       const state = store.getState().terminal;
       const modules = state.visibleModules;
+      if (state.preferences !== previousPreferences) {
+        previousPreferences = state.preferences; syncPreferences();
+        try { localStorage.setItem("terminal-lab.preferences.v1", JSON.stringify(state.preferences)); } catch { /* Optional browser storage. */ }
+      }
       if (state.watchlists !== previousLists || state.watchlist !== previousItems || state.activeWatchlist !== previousActive) {
         previousLists = state.watchlists; previousItems = state.watchlist; previousActive = state.activeWatchlist;
         try { localStorage.setItem("terminal-lab.watchlists.v1", JSON.stringify({ active: state.activeWatchlist, lists: state.watchlists.map(list => list.id === state.activeWatchlist ? { ...list, items: state.watchlist } : list) })); } catch { /* Optional browser storage. */ }

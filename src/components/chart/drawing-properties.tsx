@@ -1,17 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { GripVertical, Settings, LockKeyhole, UnlockKeyhole, Trash2, AlignJustify } from "lucide-react";
 import { TOOL_LABELS, type Drawing } from "@/lib/chart/drawings";
 
 const control = "rounded border border-terminal-border bg-terminal-bg p-1 text-[11px] disabled:opacity-40";
-export function DrawingProperties({ row, onChange, onDelete, onDuplicate, onLayer, onClose }: {
+export function DrawingProperties({ row, initialPosition, onChange, onDelete, onDuplicate, onLayer, onClose }: {
+  initialPosition?: { x: number; y: number };
   row: Drawing; onChange: (patch: Partial<Drawing>) => void; onDelete: () => void;
   onDuplicate: () => void; onLayer: (front: boolean) => void; onClose: () => void;
 }) {
   const [tab, setTab] = useState("style");
+  const [open, setOpen] = useState<"color" | "line" | "settings" | null>(null);
+  const [position, setPosition] = useState(initialPosition ?? { x: 100, y: 60 });
+  const root = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const iconButton = "flex size-6 shrink-0 items-center justify-center rounded-sm text-terminal-drawing-text hover:bg-terminal-hover disabled:opacity-35";
   const filled = ["rectangle", "ellipse", "gann-box", "measure", "price-range", "date-range"].includes(row.tool);
   const textual = ["text", "callout", "price-label"].includes(row.tool);
-  return <section role="dialog" aria-label="Çizim özellikleri" onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()} className="absolute right-2 top-2 z-30 max-h-[calc(100%-16px)] w-64 max-w-[95%] overflow-y-auto rounded border border-terminal-border-strong bg-terminal-elevated p-3 text-[11px] shadow-xl">
+  return <div ref={root} className="absolute z-30 max-w-full" style={{ left: `min(${position.x}px, max(0px, 100% - 180px))`, top: `min(${position.y}px, max(0px, 100% - 40px))` }} onPointerDown={e => e.stopPropagation()} onKeyDown={e => { if (e.key === "Escape") { if (open) setOpen(null); else onClose(); } e.stopPropagation(); }}>
+    <div role="toolbar" aria-label="Seçili çizim araçları" className="flex h-8 w-fit items-center gap-0.5 rounded-lg bg-terminal-drawing pr-2 text-xs shadow-lg">
+      <button aria-label="Çizim menüsünü taşı" title="Taşı" className={`${iconButton} touch-none cursor-grab active:cursor-grabbing`} onPointerDown={e => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); drag.current = { x: e.clientX, y: e.clientY, left: root.current?.offsetLeft ?? position.x, top: root.current?.offsetTop ?? position.y }; }} onPointerMove={e => { if (!drag.current) return; const parent = root.current?.parentElement; setPosition({ x: Math.max(0, Math.min((parent?.clientWidth ?? 500) - 180, drag.current.left + e.clientX - drag.current.x)), y: Math.max(0, Math.min((parent?.clientHeight ?? 500) - 40, drag.current.top + e.clientY - drag.current.y)) }); }} onPointerUp={e => { drag.current = null; if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }} onPointerCancel={() => { drag.current = null; }}><GripVertical size={20}/></button>
+      <span className="mx-0.5 h-5 w-px bg-terminal-border"/>
+      <button aria-label="Çizim renk paleti" title="Renk" aria-expanded={open === "color"} disabled={row.locked} onClick={() => setOpen(open === "color" ? null : "color")} className={iconButton}><span className="size-5 rounded-sm border border-white/20" style={{ background: row.color }}/></button>
+      <button aria-label="Çizgi görünümü" title="Çizgi stili ve kalınlığı" aria-expanded={open === "line"} disabled={row.locked} onClick={() => setOpen(open === "line" ? null : "line")} className={iconButton}><AlignJustify size={20}/></button>
+      <span className="mx-0.5 h-5 w-px bg-terminal-border"/>
+      <button aria-label="Çizim ayarlarını aç" title="Ayarlar" aria-expanded={open === "settings"} onClick={() => setOpen(open === "settings" ? null : "settings")} className={iconButton}><Settings size={20}/></button>
+      <button aria-label={row.locked ? "Kilidi aç" : "Kilitle"} title={row.locked ? "Kilidi aç" : "Kilitle"} aria-pressed={!!row.locked} onClick={() => onChange({ locked: !row.locked })} className={iconButton}>{row.locked ? <LockKeyhole size={20}/> : <UnlockKeyhole size={20}/>}</button>
+      <button aria-label="Seçileni sil" title="Sil" disabled={row.locked} onClick={onDelete} className={iconButton}><Trash2 size={20}/></button>
+    </div>
+    {open === "color" ? <div role="dialog" aria-label="Çizim renkleri" className="mt-1 w-56 rounded-md border border-terminal-border bg-terminal-drawing p-3 shadow-xl"><div className="grid grid-cols-6 gap-2">{["#ffffff", "#9292ff", "#6d7aee", "#48a9f8", "#16c784", "#f5bd4f", "#ef4453", "#ff8c42", "#e970c8", "#8b5cf6", "#737582", "#000000"].map(color => <button key={color} aria-label={`Çizim rengi ${color}`} aria-pressed={row.color === color} onClick={() => onChange({ color })} className="size-6 rounded-sm border border-terminal-border-strong" style={{ background: color }}/>)}</div><label className="mt-3 flex items-center justify-between text-xs">Özel renk<input aria-label="Seçili çizimin rengi" type="color" value={row.color} onChange={e => onChange({ color: e.target.value })}/></label><label className="mt-2 block text-xs">Opaklık<input className="mt-1 w-full" aria-label="Çizim opaklığı" type="range" min="0.05" max="1" step="0.05" value={row.opacity ?? 1} onChange={e => onChange({ opacity: Number(e.target.value) })}/></label></div> : null}
+    {open === "line" ? <div role="dialog" aria-label="Çizgi görünümü" className="mt-1 grid w-48 gap-2 rounded-md border border-terminal-border bg-terminal-drawing p-3 text-xs shadow-xl"><label>Kalınlık<select aria-label="Çizgi kalınlığı" className={`${control} ml-2`} value={row.lineWidth ?? 2} onChange={e => onChange({ lineWidth: Number(e.target.value) })}>{[1, 2, 3, 4, 5, 6, 8, 10].map(width => <option key={width} value={width}>{width} px</option>)}</select></label>{(["solid", "dashed", "dotted"] as const).map(style => <button key={style} aria-label={style === "solid" ? "Düz çizgi" : style === "dashed" ? "Kesikli çizgi" : "Noktalı çizgi"} aria-pressed={(row.lineStyle ?? "solid") === style} className="rounded px-2 py-2 hover:bg-terminal-hover" onClick={() => onChange({ lineStyle: style })}><span className="block border-t-2" style={{ borderStyle: style }}/></button>)}</div> : null}
+    {open === "settings" ? <section role="dialog" aria-label="Çizim özellikleri" className="mt-1 max-h-[min(420px,55vh)] w-64 max-w-[85vw] overflow-y-auto rounded border border-terminal-border-strong bg-terminal-elevated p-3 text-[11px] shadow-xl">
     <div className="mb-2 flex justify-between gap-2"><strong>{TOOL_LABELS[row.tool]}</strong><button aria-label="Çizim özelliklerini kapat" onClick={onClose}>×</button></div>
     <div role="tablist" aria-label="Çizim ayarları" className="mb-3 flex gap-2"><button role="tab" aria-selected={tab === "style"} onClick={() => setTab("style")} className={control}>Stil</button><button role="tab" aria-selected={tab === "coordinates"} onClick={() => setTab("coordinates")} className={control}>Koordinatlar</button></div>
     {tab === "style" ? <div className="grid grid-cols-2 items-center gap-2">
@@ -29,7 +49,8 @@ export function DrawingProperties({ row, onChange, onDelete, onDuplicate, onLaye
       <button onClick={() => onChange({ hidden: !row.hidden })} className={control}>{row.hidden ? "Çizimi göster" : "Çizimi gizle"}</button>
       <button disabled={row.locked} onClick={onDelete} className={`${control} text-terminal-down`}>Seçileni sil</button><button onClick={onClose} className={control}>Kapat</button>
     </div>
-  </section>;
+  </section> : null}
+  </div>;
 }
 function CoordinateEditor({ point, index, locked, onApply }: { point: Drawing["points"][number]; index: number; locked?: boolean; onApply: (point: Drawing["points"][number]) => void }) {
   const [time, setTime] = useState(String(point.time));

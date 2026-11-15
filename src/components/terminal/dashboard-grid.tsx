@@ -190,7 +190,7 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
     <div
       ref={containerRef}
       data-testid="workspace"
-      className="relative isolate min-h-0 flex-1 overflow-hidden"
+      className="workspace-surface relative isolate min-h-0 flex-1 overflow-hidden"
 
     >
       {/*

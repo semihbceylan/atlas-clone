@@ -21,6 +21,8 @@ Open http://localhost:3000. The default mode works without an API key or environ
 
 ## What to try
 
+- The user icon opens the Atlas-style account drawer with persistent light-theme and amount-visibility switches, a shortcut to simulated order history, and downloadable local feedback. Funding, transfers, exchange, and logout show explicit demo explanations; no account or money operation is performed. Amount hiding is visual blurring, not a security boundary, and exports still contain their original values.
+
 - Save/load named workspace views from the view selector. Create, rename, switch, and delete persistent watchlists; filter by market and sort by symbol or change.
 - Open **Alarmlar** to add local price thresholds and inspect triggered history. Only the selected chart is monitored while the page remains open; these are not brokerage/server alarms.
 - Switch between eight chart types, normal/log/percentage scales, grid visibility, and configurable SMA/EMA overlays.
@@ -31,7 +33,7 @@ See [Atlas feature comparison and remaining gaps](docs/atlas-feature-parity.md) 
 
 ### Edit existing chart drawings
 
-Click a line or shape (including a shape's interior), or right-click it, to open **Çizim özellikleri**. Drag in edit mode to move the object or its endpoint handles. Click an empty area or close the properties panel to return to chart navigation.
+Click a line or shape (including a shape's interior), or right-click it, to show the compact floating drawing toolbar. Its grip moves the bar; the swatch opens a color palette, the line icon opens thickness/style controls, and the remaining icons open **Çizim özellikleri**, lock/unlock, or delete. Drag in edit mode to move the object or its endpoint handles. Click an empty area or close the properties panel to return to chart navigation.
 
 - Change line color, thickness, solid/dashed/dotted style, and opacity.
 - Change shape fill color/opacity and annotation text/font size.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { ChevronDown, Plus, Star, X } from "lucide-react";
+import { ChevronDown, Plus, Settings2, X } from "lucide-react";
 
 import { IconButton } from "@/components/terminal/icon-button";
 import { Popover } from "@/components/terminal/popover";
@@ -38,6 +38,8 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
   const [listName, setListName] = useState("");
   const [market, setMarket] = useState("all");
   const [sort, setSort] = useState("manual");
+  const [manageOpen, setManageOpen] = useState(false);
+  const manageRef = useRef<HTMLDivElement>(null);
   const rows = watchlist.filter(item => market === "all" || getSymbolInfo(item.symbol).exchange === market).toSorted((a, b) => sort === "symbol" ? a.symbol.localeCompare(b.symbol) : sort === "change" ? b.changePercent - a.changePercent : 0);
 
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -61,6 +63,7 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
 
 
   const actions = (
+    <>
     <div ref={pickerRef} className="relative">
       <IconButton
         label="Sembol ekle"
@@ -117,19 +120,24 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
         </Popover>
       ) : null}
     </div>
+    <div ref={manageRef}>
+      <IconButton label="Takip listelerini yönet" icon={<Settings2 className="size-3.5"/>} size="sm" active={manageOpen} onClick={() => setManageOpen(!manageOpen)}/>
+      {manageOpen ? <Popover anchorRef={manageRef} onClose={() => setManageOpen(false)} role="dialog" ariaLabel="Takip listesi ayarları" className="z-50 w-64 rounded-lg border border-terminal-border bg-terminal-elevated p-3 text-xs shadow-xl">
+        <h3 className="mb-3 font-medium">Takip listesi ayarları</h3>
+        <div className="flex flex-col gap-3">
+          <input aria-label="Takip listesi adı" value={listName} onChange={e => setListName(e.target.value)} maxLength={60} placeholder="Liste adı" className="rounded border border-terminal-border bg-terminal-bg p-2"/>
+          <div className="flex gap-3"><button disabled={!listName.trim() || lists.length >= 20} onClick={() => { dispatch(createWatchlist({ id: crypto.randomUUID(), name: listName })); setListName(""); }} className="disabled:opacity-40">Yeni liste</button><button disabled={!listName.trim()} onClick={() => { dispatch(renameWatchlist(listName)); setListName(""); }} className="disabled:opacity-40">Yeniden adlandır</button></div>
+          <label className="flex items-center justify-between gap-2">Piyasa<select aria-label="Takip listesi piyasası" value={market} onChange={e => setMarket(e.target.value)} className="rounded bg-terminal-bg p-2"><option value="all">Tümü</option><option value="BIST">Yatırım</option><option value="Coinbase">Kripto</option></select></label>
+          <label className="flex items-center justify-between gap-2">Sıralama<select aria-label="Takip listesi sıralaması" value={sort} onChange={e => setSort(e.target.value)} className="rounded bg-terminal-bg p-2"><option value="manual">Ekleme sırası</option><option value="symbol">Sembol A–Z</option><option value="change">Değişim ↓</option></select></label>
+          <button disabled={lists.length <= 1} onClick={() => { if (window.confirm("Seçili takip listesi silinsin mi?")) dispatch(deleteWatchlist()); }} className="border-t border-terminal-border pt-3 text-left text-terminal-down disabled:opacity-40">Takip listesini sil</button>
+        </div>
+      </Popover> : null}
+    </div>
+    </>
   );
 
   return (
-    <WidgetFrame title="Takip Ettiklerim" actions={actions}>
-      <div className="flex flex-wrap gap-1 border-b border-terminal-border p-2 text-[11px]">
-        <select aria-label="Takip listesi seç" value={activeList} onChange={e => dispatch(selectWatchlistById(e.target.value))} className="min-w-0 bg-terminal-bg p-1">{lists.map(list => <option key={list.id} value={list.id}>{list.name}</option>)}</select>
-        <input aria-label="Takip listesi adı" value={listName} onChange={e => setListName(e.target.value)} maxLength={60} placeholder="Liste adı" className="w-24 min-w-0 bg-terminal-bg p-1"/>
-        <button disabled={!listName.trim() || lists.length >= 20} onClick={() => { dispatch(createWatchlist({ id: crypto.randomUUID(), name: listName })); setListName(""); }} className="disabled:opacity-40">Yeni liste</button>
-        <button disabled={!listName.trim()} onClick={() => { dispatch(renameWatchlist(listName)); setListName(""); }} className="disabled:opacity-40">Yeniden adlandır</button>
-        <button disabled={lists.length <= 1} onClick={() => { if (window.confirm("Seçili takip listesi silinsin mi?")) dispatch(deleteWatchlist()); }} className="text-terminal-down disabled:opacity-40">Takip listesini sil</button>
-        <select aria-label="Takip listesi piyasası" value={market} onChange={e => setMarket(e.target.value)} className="bg-terminal-bg p-1"><option value="all">Tümü</option><option value="BIST">Yatırım</option><option value="Coinbase">Kripto</option></select>
-        <select aria-label="Takip listesi sıralaması" value={sort} onChange={e => setSort(e.target.value)} className="bg-terminal-bg p-1"><option value="manual">Ekleme sırası</option><option value="symbol">Sembol A–Z</option><option value="change">Değişim ↓</option></select>
-      </div>
+    <WidgetFrame ariaLabel="Takip Ettiklerim" title={<select aria-label="Takip listesi seç" value={activeList} onChange={e => dispatch(selectWatchlistById(e.target.value))} className="widget-no-drag min-w-0 flex-1 truncate bg-transparent text-[13px] font-medium outline-none">{lists.map(list => <option className="bg-terminal-panel" key={list.id} value={list.id}>{list.name}</option>)}</select>} actions={actions} bodyClassName="flex flex-col">
       {watchlist.length === 0 ? (
         <WatchlistEmptyState onAddSymbol={() => setPickerOpen(true)} />
       ) : (
@@ -154,12 +162,6 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
                     aria-current={isSelected ? "true" : undefined}
                     className="flex min-w-0 flex-1 items-center gap-2 text-left"
                   >
-                    <span
-                      aria-hidden
-                      className={`size-1.5 shrink-0 rounded-full ${
-                        isSelected ? "bg-terminal-accent-soft" : "bg-transparent"
-                      }`}
-                    />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[11.5px] font-semibold text-terminal-text">
                         {item.symbol}
@@ -194,18 +196,6 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
             })}
           </div>
 
-          <div className="flex items-center justify-between border-t border-terminal-border px-3 py-1.5">
-            <span className="text-[10px] text-terminal-subtle">
-              {watchlist.length} sembol izleniyor
-            </span>
-            <button
-              type="button"
-              onClick={() => setPickerOpen(true)}
-              className="text-[10px] font-medium text-terminal-accent-soft hover:underline"
-            >
-              Sembol ekle
-            </button>
-          </div>
         </div>
       )}
     </WidgetFrame>
@@ -215,14 +205,11 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
 function WatchlistEmptyState({ onAddSymbol }: { onAddSymbol: () => void }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center">
-      <span className="flex size-9 items-center justify-center rounded-full border border-terminal-border bg-terminal-panel-alt">
-        <Star className="size-4 text-terminal-subtle" />
-      </span>
       <p className="text-[13px] font-medium text-terminal-text">Henüz varlık eklenmedi</p>
       <p className="max-w-[220px] text-[12px] leading-relaxed text-terminal-muted">
         Takip etmek istediğin varlıkları ekleyerek başla
       </p>
-      <button type="button" onClick={onAddSymbol} className="mt-1 text-[12px] text-terminal-accent-soft hover:underline">Varlık ekle</button>
+      <button type="button" onClick={onAddSymbol} aria-label="Varlık ekle" className="mt-1 text-[12px] text-terminal-accent-soft hover:underline">Varlık ekle</button>
     </div>
   );
 }

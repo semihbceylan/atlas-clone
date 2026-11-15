@@ -21,7 +21,7 @@ export function DrawingToolbar(props: Props) {
   const [groupTools, setGroupTools] = useState<ChartTool[]>(DRAWING_GROUPS.map(item => item.tools[0][0]));
   const root = useRef<HTMLDivElement>(null);
   useClickOutside(root, group !== null, () => setGroup(null));
-  return <div ref={root} className="drawing-rail absolute inset-y-0 left-0 z-20 w-11 border-r border-terminal-border bg-terminal-panel/95">
+  return <div ref={root} className="drawing-rail absolute inset-y-0 left-0 z-20 w-11 border-r border-terminal-border">
     <div role="toolbar" aria-label="Çizim araçları" aria-orientation="vertical" className="drawing-rail-scroll flex h-full flex-col items-center gap-1.5 overflow-y-auto overflow-x-hidden pb-3 pt-2">
       {DRAWING_GROUPS.map((item, index) => {
         const Icon = icons[index];
