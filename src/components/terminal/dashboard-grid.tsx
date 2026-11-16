@@ -11,7 +11,7 @@ import { noOverlapCompactor, transformStrategy } from "react-grid-layout/core";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
-import type { ReactNode } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   DEFAULT_LAYOUT,
   ALL_WIDGET_IDS,
@@ -40,6 +40,17 @@ interface DashboardGridProps {
 interface EditedLayout {
   layout: Layout;
   resetToken: number;
+}
+
+interface MiddleDrag {
+  pointerId: number;
+  id: string;
+  startX: number;
+  startY: number;
+  stepX: number;
+  stepY: number;
+  initial: Layout;
+  current: Layout;
 }
 
 /** Cheap structural comparison so mousemove never triggers a redundant setState. */
@@ -73,8 +84,9 @@ function toPersistedLayout(layout: Layout): Layout {
  * 2. **Persistence** — layout changes are held in React state during a drag
  *    (cheap) but only written to localStorage on `onDragStop`/`onResizeStop`, so a
  *    drag gesture produces exactly one storage write instead of one per frame.
- * 3. **Interaction isolation** — `dragConfig.handle` scopes dragging to widget
- *    headers, so the chart's crosshair and zoom gestures never move the panel.
+ * 3. **Interaction isolation** — left-button dragging is scoped to headers;
+ *    middle-button pointer capture moves the whole module without forwarding
+ *    the gesture to chart controls or triggering browser autoscroll.
  */
 export function DashboardGrid({ widgets }: DashboardGridProps) {
   const dispatch = useAppDispatch();
@@ -83,6 +95,7 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
   const [containerHeight, setContainerHeight] = useState(0);
   const resizing = useRef(false);
   const dragging = useRef(false);
+  const middleDrag = useRef<MiddleDrag | null>(null);
   const rowHeight = Math.max(1, (containerHeight - GRID_CONTAINER_PADDING[1] * 2 - GRID_MARGIN[1] * (GRID_ROWS - 1)) / GRID_ROWS);
   const positionStrategy = {
     ...transformStrategy,
@@ -184,6 +197,44 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
     const h = Math.max(minimum.minH, Math.min(GRID_ROWS, item.h));
     return { ...item, ...minimum, w, h, x: Math.min(item.x, GRID_COLS - w), y: Math.min(item.y, GRID_ROWS - h) };
   });
+  const startMiddleDrag = (event: ReactPointerEvent<HTMLDivElement>, id: string) => {
+    if (event.button !== 1 || event.pointerType !== "mouse") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (middleDrag.current || dragging.current || resizing.current) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    middleDrag.current = {
+      pointerId: event.pointerId, id,
+      startX: event.clientX, startY: event.clientY,
+      stepX: (width - GRID_CONTAINER_PADDING[0] * 2 + GRID_MARGIN[0]) / GRID_COLS,
+      stepY: rowHeight + GRID_MARGIN[1],
+      initial: renderedLayout, current: renderedLayout,
+    };
+    raise(id);
+    event.currentTarget.style.cursor = "grabbing";
+  };
+  const moveMiddleDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = middleDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    drag.current = drag.initial.map(item => item.i !== drag.id ? item : {
+      ...item,
+      x: Math.max(0, Math.min(GRID_COLS - item.w, item.x + Math.round((event.clientX - drag.startX) / drag.stepX))),
+      y: Math.max(0, Math.min(GRID_ROWS - item.h, item.y + Math.round((event.clientY - drag.startY) / drag.stepY))),
+    });
+    handleLayoutChange(drag.current);
+  };
+  const finishMiddleDrag = (event: ReactPointerEvent<HTMLDivElement>, cancel = false) => {
+    const drag = middleDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    event.stopPropagation();
+    middleDrag.current = null;
+    event.currentTarget.style.cursor = "";
+    if (cancel) handleLayoutChange(drag.initial);
+    else persistLayout(drag.current);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   // New modules start on top; interaction then determines the frontmost window.
   const stackingOrder = [...instances.filter(id => !stack.includes(id)), ...stack.filter(id => instances.includes(id))];
   const command = (id: string, action: WidgetCommand) => {
@@ -253,7 +304,15 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
           onResizeStop={next => { resizing.current = false; persistLayout(next); }}
         >
           {instances.map((id) => (
-            <div key={id} data-widget-id={id} onPointerDownCapture={() => raise(id)} onFocusCapture={() => raise(id)} style={{ zIndex: stackingOrder.indexOf(id) + 1 }} className="min-h-0 overflow-hidden">
+            <div key={id} data-widget-id={id}
+              onPointerDownCapture={event => { if (event.button === 1) startMiddleDrag(event, id); else raise(id); }}
+              onPointerMoveCapture={moveMiddleDrag}
+              onPointerUpCapture={event => finishMiddleDrag(event)}
+              onPointerCancelCapture={event => finishMiddleDrag(event, true)}
+              onLostPointerCapture={event => finishMiddleDrag(event)}
+              onMouseDownCapture={event => { if (event.button === 1) { event.preventDefault(); event.stopPropagation(); } }}
+              onAuxClickCapture={event => { if (event.button === 1) { event.preventDefault(); event.stopPropagation(); } }}
+              onFocusCapture={() => raise(id)} style={{ zIndex: stackingOrder.indexOf(id) + 1 }} className="min-h-0 overflow-hidden">
               <WidgetContext.Provider value={{ id, type: id.split(":")[0] as WidgetId, command: action => command(id, action) }}>{widgets[id.split(":")[0] as WidgetId]}</WidgetContext.Provider>
             </div>
           ))}

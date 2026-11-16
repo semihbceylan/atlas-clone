@@ -541,6 +541,43 @@ test("widgets overlap without pushing neighbors, raise on interaction, persist, 
   expect(await page.getByTestId("workspace").evaluate(el => el.scrollTop)).toBe(0);
 });
 
+test("middle-button dragging moves module bodies, clamps to the workspace and persists", async ({ page }) => {
+  await page.addInitScript(() => {
+    if (localStorage.getItem("middle-drag-test")) return;
+    localStorage.setItem("middle-drag-test", "true");
+    localStorage.setItem("terminal-lab.modules.v1", JSON.stringify(["positions"]));
+    localStorage.setItem("atlas-terminal.layout.v2", JSON.stringify([{ i: "positions", x: 12, y: 6, w: 24, h: 12 }]));
+  });
+  await page.goto("/");
+  const widget = page.locator('[data-widget-id="positions"]');
+  await expect(widget).toBeVisible();
+  const before = (await widget.boundingBox())!;
+  const workspace = (await page.getByTestId("workspace").boundingBox())!;
+  const x = before.x + before.width / 2, y = before.y + before.height / 2;
+  // Left dragging the body must still be reserved for the module's own controls.
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 60, y + 60, { steps: 4 });
+  await page.mouse.up();
+  expect((await widget.boundingBox())!.x).toBeCloseTo(before.x, 0);
+  await page.mouse.move(x, y);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(x + workspace.width / 48 * 2.2, y + workspace.height / 24 * 2.2, { steps: 5 });
+  await expect.poll(async () => (await widget.boundingBox())!.x).toBeGreaterThan(before.x + 40);
+  const preview = (await widget.boundingBox())!;
+  await page.mouse.up({ button: "middle" });
+  expect((await widget.boundingBox())!.x).toBeCloseTo(preview.x, 0);
+  await page.reload();
+  await expect.poll(async () => (await widget.boundingBox())!.x).toBeCloseTo(preview.x, 0);
+  const moved = (await widget.boundingBox())!;
+  await page.mouse.move(moved.x + moved.width / 2, moved.y + moved.height / 2);
+  await page.mouse.down({ button: "middle" });
+  await page.mouse.move(0, 0, { steps: 5 });
+  await page.mouse.up({ button: "middle" });
+  await expect.poll(async () => (await widget.boundingBox())!.x).toBeCloseTo(workspace.x + 1, 0);
+  await expect.poll(async () => (await widget.boundingBox())!.y).toBeCloseTo(workspace.y + 1, 0);
+});
+
 test("moving widgets stays on grid during the gesture and does not jump on release", async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.setItem("terminal-lab.modules.v1", JSON.stringify(["positions"]));
