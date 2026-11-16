@@ -2,38 +2,54 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
-import { AlarmClock, Bell, ChevronDown, Search, Plus, Maximize, User, RotateCcw, ChartNoAxesCombined, LayoutGrid } from "lucide-react";
+import { AlarmClock, Bell, Search, Plus, Maximize, User, RotateCcw, ChartNoAxesCombined, LifeBuoy, ExternalLink } from "lucide-react";
 import { SYMBOLS } from "@/config/market-symbols";
 import { useClickOutside } from "@/hooks/use-click-outside";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import { requestLayoutReset, selectWatchlist, setSelectedSymbol, toggleModule } from "@/store/slices/terminal-slice";
-import { ALL_WIDGET_IDS, WIDGET_LABELS } from "@/config/default-layout";
-import { WorkspaceViews, useViewName } from "./workspace-views";
+import { requestLayoutReset, selectWatchlist, setSelectedSymbol } from "@/store/slices/terminal-slice";
+import { ModuleCatalog } from "./module-catalog";
+import { WorkspaceViews, WorkspaceViewTabs, createWorkspaceView } from "./workspace-views";
 import { UserMenu } from "./user-menu";
+import { SideDrawer, changeDrawer } from "./side-drawer";
 
 const MENU_PANEL = "absolute top-full right-2 z-40 overflow-hidden rounded-md border border-terminal-border-strong bg-terminal-elevated shadow-2xl";
-type Menu = "search" | "layout" | "modules" | "account" | "notifications" | null;
+type Menu = "search" | "layout" | "modules" | "account" | "notifications" | "support" | null;
 
 export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
-  const viewName = useViewName();
   const dispatch = useAppDispatch();
-  const visibleModules = useAppSelector(state => state.terminal.visibleModules);
   const [openMenu, setOpenMenu] = useState<Menu>(null);
+  const [exitingMenus, setExitingMenus] = useState<Menu[]>([]);
+  const closeDrawer = (menu: Menu) => {
+    setExitingMenus(current => current.filter(item => item !== menu));
+    setOpenMenu(current => current === menu ? null : current);
+  };
   const headerRef = useRef<HTMLElement | null>(null);
   const close = useCallback(() => setOpenMenu(null), []);
-  useClickOutside(headerRef, openMenu !== null && openMenu !== "account", close);
+  useClickOutside(headerRef, openMenu !== null && !["account", "modules", "notifications"].includes(openMenu), close);
   useEffect(() => {
     const openSearch = () => setOpenMenu("search");
+    const openModules = () => setOpenMenu("modules");
     const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close();
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault(); setOpenMenu(current => current === "search" ? null : "search");
       }
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("atlas:search", openSearch);
-    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("atlas:search", openSearch); };
-  }, []);
-  const toggle = (menu: Menu) => setOpenMenu(current => current === menu ? null : menu);
+    window.addEventListener("atlas:modules", openModules);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("atlas:search", openSearch); window.removeEventListener("atlas:modules", openModules); };
+  }, [close]);
+  const toggle = (menu: Menu) => {
+    if (["modules", "notifications", "account"].includes(menu ?? "")) {
+      changeDrawer(openMenu === menu ? undefined : () => {
+        if (openMenu && ["modules", "notifications", "account"].includes(openMenu)) setExitingMenus(current => [...current, openMenu]);
+        setOpenMenu(menu);
+      });
+      return;
+    }
+    setOpenMenu(current => current === menu ? null : menu);
+  };
   const fullscreen = () => {
     const action = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
     void action.catch(() => {});
@@ -44,17 +60,17 @@ export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
         <div aria-label="Terminal Lab — independent portfolio project" className="flex w-12 shrink-0 items-center justify-center sm:w-20" title="Terminal Lab · Portfolio demo">
           <span className="rounded border border-terminal-accent/40 px-1.5 py-0.5 font-mono text-[12px] font-semibold tracking-tight text-terminal-accent-soft">TL</span>
         </div>
-        <button type="button" onClick={() => toggle("layout")} aria-expanded={openMenu === "layout"} className="flex w-28 items-center sm:w-36 gap-2 border-x border-terminal-border bg-terminal-panel-alt px-2.5 hover:bg-terminal-hover">
-          <span className="flex size-5 items-center justify-center rounded-full bg-terminal-bg text-[11px]">1</span><span className="truncate">{viewName}</span><ChevronDown className="ml-auto size-3 text-terminal-muted"/>
-        </button>
+        <WorkspaceViewTabs onMenu={() => toggle("layout")} expanded={openMenu === "layout"}/>
+        <button type="button" aria-label="Yeni görünüm oluştur" title="Yeni görünüm" onClick={() => { try { createWorkspaceView(); } catch (error) { window.alert(error instanceof Error ? error.message : "Görünüm oluşturulamadı."); } }} className="flex aspect-square h-full shrink-0 items-center justify-center border-r border-terminal-border hover:bg-terminal-hover"><Plus aria-hidden className="size-4"/></button>
       </div>
       <div className="flex items-stretch divide-x divide-terminal-border border-l border-terminal-border">
         <button type="button" title="Arama (⌘K)" aria-label="Arama" onClick={() => toggle("search")} className="px-3 hover:bg-terminal-hover"><Search className="size-4"/></button>
-        <button type="button" onClick={() => toggle("modules")} aria-expanded={openMenu === "modules"} className="flex items-center gap-2 px-3 hover:bg-terminal-hover"><Plus className="size-4"/><span className="hidden sm:inline">Modül ekle</span></button>
+        <button type="button" data-drawer-trigger onClick={() => toggle("modules")} aria-expanded={openMenu === "modules"} className="flex items-center gap-2 px-3 font-medium hover:bg-terminal-hover"><Plus className="size-4"/><span className="hidden sm:inline">Modül ekle</span></button>
         <span title="Emirler simülasyondur" className="hidden items-center gap-2 bg-terminal-up/5 px-3 text-terminal-up lg:flex"><ChartNoAxesCombined className="size-4"/><span className="text-[11px]">Demo portföy</span></span>
-        <button type="button" aria-label="Bildirimler" onClick={() => toggle("notifications")} className="px-2.5 hover:bg-terminal-hover"><Bell className="size-4"/></button>
-        <button type="button" onClick={onAlerts} className="flex items-center gap-2 px-2.5 text-xs hover:bg-terminal-hover"><AlarmClock aria-hidden className="size-4"/>Alarmlar</button>
-        <button type="button" aria-label="Kullanıcı menüsü" aria-haspopup="dialog" aria-expanded={openMenu === "account"} onClick={() => toggle("account")} className="px-2.5 hover:bg-terminal-hover"><User className="size-4"/></button>
+        <button type="button" data-drawer-trigger aria-label="Alarmlar" title="Alarmlar" onClick={onAlerts} className="flex items-center justify-center px-2.5 hover:bg-terminal-hover"><AlarmClock aria-hidden className="size-4"/></button>
+        <button type="button" aria-label="Terminal Lab Destek" title="Terminal Lab Destek" aria-haspopup="dialog" aria-expanded={openMenu === "support"} onClick={() => toggle("support")} className="flex items-center justify-center px-2.5 hover:bg-terminal-hover"><LifeBuoy aria-hidden className="size-4"/></button>
+        <button type="button" data-drawer-trigger aria-label="Bildirimler" onClick={() => toggle("notifications")} className="px-2.5 hover:bg-terminal-hover"><Bell className="size-4"/></button>
+        <button type="button" data-drawer-trigger aria-label="Kullanıcı menüsü" aria-haspopup="dialog" aria-expanded={openMenu === "account"} onClick={() => toggle("account")} className="px-2.5 hover:bg-terminal-hover"><User className="size-4"/></button>
         <button type="button" aria-label="Tam ekran" onClick={fullscreen} className="px-2.5 hover:bg-terminal-hover"><Maximize className="size-4"/></button>
       </div>
       {openMenu === "search" ? <SearchPalette onSelect={symbol => { dispatch(setSelectedSymbol(symbol)); close(); }}/> : null}
@@ -64,13 +80,22 @@ export function TerminalHeader({ onAlerts }: { onAlerts: () => void }) {
         <p className="px-2 py-2 text-[11px] leading-relaxed text-terminal-muted">Panelleri başlıklarından taşıyabilir, kenarlarından boyutlandırabilirsin.</p>
         <WorkspaceViews/>
       </div> : null}
-      {openMenu === "modules" ? <div className={`${MENU_PANEL} w-64 p-3`}>
-        <p className="mb-3 font-medium">Modüller</p>
-        {ALL_WIDGET_IDS.map(id => <button key={id} type="button" aria-pressed={visibleModules.includes(id)} onClick={() => dispatch(toggleModule(id))} className="flex w-full items-center gap-2 border-t border-terminal-border py-3 text-left hover:text-terminal-accent-soft"><LayoutGrid className="size-4"/>{WIDGET_LABELS[id]}<span className="ml-auto text-[10px] text-terminal-muted">{visibleModules.includes(id) ? "Kaldır" : "Ekle"}</span></button>)}
-        <p className="pt-2 text-[10px] text-terminal-muted">Panelleri ızgarada taşı, üst üste yerleştir. Tıkladığın panel öne gelir.</p>
-      </div> : null}
-      {openMenu === "account" ? <UserMenu onClose={close}/> : null}
-      {openMenu === "notifications" ? <div className={`${MENU_PANEL} w-64 p-4`}><p className="mb-2 font-medium">Bildirimler</p><p className="text-[12px] leading-relaxed text-terminal-muted">Henüz bir bildirimin bulunmuyor.</p></div> : null}
+      {openMenu === "modules" || exitingMenus.includes("modules") ? <SideDrawer title="Modül ekle" onClose={() => closeDrawer("modules")} closeLabel="Modül panelini kapat" compact>
+        <ModuleCatalog/>
+      </SideDrawer> : null}
+      {openMenu === "account" || exitingMenus.includes("account") ? <UserMenu onClose={() => closeDrawer("account")}/> : null}
+      {openMenu === "support" ? <section role="dialog" aria-label="Terminal Lab Destek" className={`${MENU_PANEL} max-h-[calc(100dvh-48px)] w-80 max-w-[calc(100vw-16px)] overflow-y-auto p-4 text-xs`}>
+        <div className="mb-4 flex items-center gap-2"><LifeBuoy aria-hidden className="size-4 text-terminal-accent-soft"/><h2 className="text-sm font-medium">Terminal Lab Destek</h2><button type="button" aria-label="Desteği kapat" onClick={close} className="ml-auto rounded px-2 py-1 text-terminal-muted hover:bg-terminal-hover">×</button></div>
+        <p className="mb-3 text-terminal-muted">Çalışma alanını kullanmaya başla</p>
+        <ul className="space-y-3 leading-relaxed">
+          <li><strong>Sembol ara</strong><p className="text-terminal-muted">⌘K / Ctrl+K ile aramayı aç ve bir varlık seç.</p></li>
+          <li><strong>Çalışma alanını düzenle</strong><p className="text-terminal-muted">Modülleri başlığın boş alanından taşı; kenar ve köşelerinden boyutlandır.</p></li>
+          <li><strong>Modül ekle</strong><p className="text-terminal-muted">Üst menüden modül ekle, görünüm menüsünden düzenini kaydet.</p></li>
+        </ul>
+        <a href="https://github.com/semihbceylan/atlas-clone/issues" target="_blank" rel="noopener noreferrer" className="mt-4 flex items-center justify-between rounded border border-terminal-border px-3 py-2 hover:bg-terminal-hover">Sorun bildir / Öneri paylaş<ExternalLink aria-hidden className="size-3.5"/></a>
+        <p className="mt-3 text-[11px] leading-relaxed text-terminal-muted">Bağımsız demo projesidir. Canlı müşteri desteği veya Midas hesap desteği sunulmaz. Emirler simülasyondur.</p>
+      </section> : null}
+      {openMenu === "notifications" || exitingMenus.includes("notifications") ? <SideDrawer title="Bildirimler" onClose={() => closeDrawer("notifications")} closeLabel="Bildirimleri kapat"><div className="flex h-full min-h-60 flex-col items-center justify-center gap-3 text-center"><Bell aria-hidden className="size-8 text-terminal-subtle"/><p className="text-sm">Henüz bir bildirimin bulunmuyor.</p><p className="max-w-60 text-xs leading-relaxed text-terminal-muted">Bildirimlerin burada görüntülenir.</p></div></SideDrawer> : null}
     </header>
   );
 }

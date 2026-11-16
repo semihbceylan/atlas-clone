@@ -1,4 +1,5 @@
 "use client";
+import { changeDrawer } from "./side-drawer";
 
 import { useMemo, useState } from "react";
 import { PriceAlerts } from "./price-alerts";
@@ -51,7 +52,7 @@ export function TradingTerminal() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-terminal-bg">
-      <TerminalHeader onAlerts={() => setAlertsOpen(true)} />
+      <TerminalHeader onAlerts={() => changeDrawer(alertsOpen ? undefined : () => setAlertsOpen(true))} />
       {hydrated ? <PriceAlerts api={api} open={alertsOpen} onClose={() => setAlertsOpen(false)}/> : null}
       <DashboardGrid widgets={widgets} />
       <footer className="flex min-h-6 shrink-0 flex-wrap items-center justify-between gap-x-3 border-t border-terminal-border px-3 py-1 text-[10px] text-terminal-muted">

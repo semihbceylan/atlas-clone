@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactGridLayout, {
   useContainerWidth,
   type Layout,
   type LayoutItem,
 } from "react-grid-layout";
-import { noOverlapCompactor } from "react-grid-layout/core";
+import { noOverlapCompactor, transformStrategy } from "react-grid-layout/core";
 // Structural CSS for the grid and its resize handles. Theming lives in globals.css.
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -29,6 +29,7 @@ import { clearLayout, loadLayout, saveLayout } from "@/lib/storage/layout-storag
 import { selectLayoutResetToken, toggleModule } from "@/store/slices/terminal-slice";
 import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { WidgetContext, type WidgetCommand } from "@/components/terminal/widget-context";
+import { WorkspaceStarter } from "./workspace-views";
 
 interface DashboardGridProps {
   /** One node per widget id. Order in the DOM follows `ALL_WIDGET_IDS`. */
@@ -80,6 +81,28 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
   const { width, containerRef, mounted } = useContainerWidth({ initialWidth: 1600 });
   const hydrated = useHydrated();
   const [containerHeight, setContainerHeight] = useState(0);
+  const resizing = useRef(false);
+  const dragging = useRef(false);
+  const rowHeight = Math.max(1, (containerHeight - GRID_CONTAINER_PADDING[1] * 2 - GRID_MARGIN[1] * (GRID_ROWS - 1)) / GRID_ROWS);
+  const positionStrategy = {
+    ...transformStrategy,
+    calcStyle(position: Parameters<typeof transformStrategy.calcStyle>[0]) {
+      if (!resizing.current && !dragging.current) return transformStrategy.calcStyle(position);
+      const stepX = (width - GRID_CONTAINER_PADDING[0] * 2 + GRID_MARGIN[0]) / GRID_COLS;
+      const stepY = rowHeight + GRID_MARGIN[1];
+      const x = Math.round((position.left - GRID_CONTAINER_PADDING[0]) / stepX);
+      const y = Math.round((position.top - GRID_CONTAINER_PADDING[1]) / stepY);
+      const w = Math.round((position.width + GRID_MARGIN[0]) / stepX);
+      const h = Math.round((position.height + GRID_MARGIN[1]) / stepY);
+      const left = Math.round(x * stepX + GRID_CONTAINER_PADDING[0]);
+      const top = Math.round(y * stepY + GRID_CONTAINER_PADDING[1]);
+      return transformStrategy.calcStyle({
+        left, top,
+        width: Math.round((x + w) * stepX + GRID_CONTAINER_PADDING[0]) - left - GRID_MARGIN[0],
+        height: Math.round((y + h) * stepY + GRID_CONTAINER_PADDING[1]) - top - GRID_MARGIN[1],
+      });
+    },
+  };
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -198,7 +221,7 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
         client render both use `initialWidth` and the default layout, so the
         markup matches; the saved layout is applied right after hydration.
       */}
-      {mounted && hydrated ? (
+      {mounted && hydrated && instances.length > 0 ? (
         <ReactGridLayout
           width={width}
           autoSize={false}
@@ -207,7 +230,7 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
           gridConfig={{
             cols: GRID_COLS,
             maxRows: GRID_ROWS,
-            rowHeight: Math.max(1, (containerHeight - GRID_CONTAINER_PADDING[1] * 2 - GRID_MARGIN[1] * (GRID_ROWS - 1)) / GRID_ROWS),
+            rowHeight,
             margin: GRID_MARGIN,
             containerPadding: GRID_CONTAINER_PADDING,
           }}
@@ -222,9 +245,12 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
             handles: ["n", "ne", "e", "se", "s", "sw", "w", "nw"],
           }}
           compactor={noOverlapCompactor}
+          positionStrategy={positionStrategy}
+          onResizeStart={() => { resizing.current = true; }}
+          onDragStart={() => { dragging.current = true; }}
           onLayoutChange={handleLayoutChange}
-          onDragStop={persistLayout}
-          onResizeStop={persistLayout}
+          onDragStop={next => { dragging.current = false; persistLayout(next); }}
+          onResizeStop={next => { resizing.current = false; persistLayout(next); }}
         >
           {instances.map((id) => (
             <div key={id} data-widget-id={id} onPointerDownCapture={() => raise(id)} onFocusCapture={() => raise(id)} style={{ zIndex: stackingOrder.indexOf(id) + 1 }} className="min-h-0 overflow-hidden">
@@ -233,7 +259,7 @@ export function DashboardGrid({ widgets }: DashboardGridProps) {
           ))}
         </ReactGridLayout>
       ) : null}
-      {instances.length === 0 ? <p className="p-8 text-center text-terminal-muted">Çalışma alanın boş. Modül ekle menüsünden bir modül seç.</p> : null}
+      {mounted && hydrated && instances.length === 0 ? <WorkspaceStarter/> : null}
     </div>
   );
 }

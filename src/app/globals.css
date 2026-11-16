@@ -27,7 +27,8 @@
   --color-terminal-drawing: #282828;
   --color-terminal-drawing-text: #bdbdc5;
 
-  --font-sans: ui-sans-serif, system-ui, sans-serif;
+  /* Match Atlas typography with locally hosted Inter, including Turkish glyphs. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
@@ -123,6 +124,11 @@ html[data-hide-amounts="true"] [data-sensitive] {
   visibility: hidden;
 }
 
+/* Grid geometry must never tween between cells or lag behind the pointer. */
+.react-grid-layout > .react-grid-item.cssTransforms {
+  transition: none;
+}
+
 .react-grid-item.react-draggable-dragging,
 .react-grid-item.resizing {
   /* The widget's interaction-managed inline z-index owns the stacking order. */
@@ -167,19 +173,20 @@ html[data-hide-amounts="true"] [data-sensitive] {
   opacity: 1;
 }
 
-/* Edge hit areas span the side; corners take precedence at their intersections. */
-.react-grid-layout .react-grid-item > :is(.react-resizable-handle-n, .react-resizable-handle-s) {
-  left: 14px;
-  right: 14px;
+/* Outrank the library's compound selectors even when its CSS loads after ours.
+ * Full-length 8px edge strips match Atlas; 16px corners win at intersections. */
+.react-grid-layout .react-grid-item > .react-resizable-handle:is(.react-resizable-handle-n, .react-resizable-handle-s) {
+  left: 0;
+  right: 0;
   width: auto;
   height: 8px;
   margin: 0;
   transform: none;
   cursor: ns-resize;
 }
-.react-grid-layout .react-grid-item > :is(.react-resizable-handle-e, .react-resizable-handle-w) {
-  top: 14px;
-  bottom: 14px;
+.react-grid-layout .react-grid-item > .react-resizable-handle:is(.react-resizable-handle-e, .react-resizable-handle-w) {
+  top: 0;
+  bottom: 0;
   height: auto;
   width: 8px;
   margin: 0;
@@ -219,6 +226,15 @@ html[data-hide-amounts="true"] [data-sensitive] {
   }
 }
 button { cursor: pointer; }
+/* Shared Atlas-style right drawer motion for all navigation panels. */
+@keyframes drawer-in { from { transform: translateX(calc(100% + 16px)); } to { transform: translateX(0); } }
+@keyframes drawer-out { from { transform: translateX(0); } to { transform: translateX(calc(100% + 16px)); } }
+@keyframes drawer-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-fade-out { from { opacity: 1; } to { opacity: 0; } }
+.terminal-drawer { animation: drawer-in 360ms cubic-bezier(.25, .1, .25, 1) both; }
+.terminal-drawer[data-state="closed"] { animation: drawer-out 160ms ease-in both; }
+.terminal-drawer-overlay { animation: drawer-fade-in 360ms ease-out both; }
+.terminal-drawer-overlay[data-state="closed"] { animation: drawer-fade-out 160ms ease-in both; pointer-events: none; }
 .workspace-nav button { border-radius: 0; }
 .widget-frame:fullscreen { height: 100dvh; }
 

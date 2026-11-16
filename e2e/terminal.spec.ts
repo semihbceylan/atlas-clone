@@ -1,5 +1,102 @@
 import { expect, test } from "@playwright/test";
 
+test("module catalog matches Atlas cards and typography", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Modül ekle", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Modül ekle", exact: true });
+  await expect(drawer.getByRole("heading")).toHaveCSS("font-weight", "600");
+  const catalog = drawer.getByLabel("Modüller");
+  await expect(catalog.getByRole("button")).toHaveCount(12);
+  await expect(catalog.getByRole("button").first()).toHaveCSS("height", "136px");
+  await expect(catalog.getByText("Takip listesi", { exact: true })).toHaveCSS("font-weight", "400");
+  await expect(catalog.getByText("Yeni", { exact: true })).toBeVisible();
+  await expect(catalog.getByRole("button", { name: "Midas Pro — demoda mevcut değil" })).toBeDisabled();
+  const portfolio = catalog.getByRole("button", { name: "Portföy Ekle", exact: true });
+  await portfolio.click();
+  await expect(catalog.getByRole("button", { name: "Portföy Kaldır", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("drawer switching animates both panels simultaneously and outside clicks dismiss", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Modül ekle", exact: true }).click();
+  for (const [oldTitle, trigger, title] of [["Modül ekle", "Alarmlar", "Alarmlar"], ["Alarmlar", "Bildirimler", "Bildirimler"], ["Bildirimler", "Kullanıcı menüsü", "Menü"], ["Menü", "Modül ekle", "Modül ekle"]]) {
+    await page.getByRole("button", { name: trigger, exact: true }).click();
+    await expect(page.getByRole("dialog", { name: oldTitle, exact: true })).toHaveAttribute("data-state", "closed");
+    await expect(page.getByRole("dialog", { name: title, exact: true })).toHaveAttribute("data-state", "open");
+    await expect(page.getByRole("dialog", { name: title, exact: true })).toHaveCSS("animation-name", "drawer-in");
+    await expect(page.getByRole("dialog")).toHaveCount(1);
+  }
+  await page.locator(".terminal-drawer-overlay").click({ position: { x: 20, y: 100 } });
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("navigation drawers share styling and slide in from the right", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  for (const [trigger, title] of [["Modül ekle", "Modül ekle"], ["Bildirimler", "Bildirimler"], ["Alarmlar", "Alarmlar"], ["Kullanıcı menüsü", "Menü"]]) {
+    await page.getByRole("button", { name: trigger, exact: true }).click();
+    const drawer = page.getByRole("dialog", { name: title, exact: true });
+    await expect(drawer).toHaveClass(/terminal-drawer/);
+    await expect(drawer).toHaveCSS("width", "368px");
+    await expect(drawer).toHaveCSS("top", "14px");
+    await expect(drawer).toHaveCSS("right", "16px");
+    await expect(drawer).toHaveCSS("bottom", "16px");
+    await expect(drawer).toHaveCSS("border-radius", "6px");
+    await expect(drawer).toHaveCSS("animation-name", "drawer-in");
+    await expect(drawer).toHaveCSS("animation-duration", "0.36s");
+    await expect(drawer).toHaveAttribute("aria-modal", "true");
+    await page.keyboard.press("Escape");
+    await expect(drawer).toHaveAttribute("data-state", "closed");
+    await expect(drawer).toHaveCount(0);
+    await page.getByRole("button", { name: trigger, exact: true }).click();
+    await expect(drawer).toBeVisible();
+    await page.getByRole("button", { name: trigger, exact: true }).click();
+    await expect(drawer).toHaveAttribute("data-state", "closed");
+    await expect(drawer).toHaveCount(0);
+  }
+});
+
+test("new view starts empty, offers templates and preserves the previous workspace", async ({ page }) => {
+  const hydrationErrors: string[] = [];
+  page.on("pageerror", error => hydrationErrors.push(error.message));
+  page.on("console", message => { if (message.type() === "error" && /hydration|didn't match|#418/i.test(message.text())) hydrationErrors.push(message.text()); });
+  await page.goto("/");
+  await expect(page.locator('[data-widget-id="chart"]')).toBeVisible();
+  await page.getByRole("button", { name: "Yeni görünüm oluştur", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Yeni görünüm", exact: true })).toBeVisible();
+  await expect(page.locator("[data-widget-id]")).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Yeni görünüm", exact: true })).toBeVisible();
+  expect(hydrationErrors).toEqual([]);
+  await page.getByRole("button", { name: "Hazır görünüm seç: Kripto", exact: true }).click();
+  await expect(page.locator('[data-widget-id="chart"]')).toBeVisible();
+  await expect(page.locator('[data-widget-id="details"]')).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Yeni görünüm", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "İlk görünüm", exact: true }).click();
+  await expect(page.locator('[data-widget-id="positions"]')).toBeVisible();
+  await page.getByRole("tab", { name: "Yeni görünüm", exact: true }).click();
+  await expect(page.locator('[data-widget-id="details"]')).toBeVisible();
+  await page.getByRole("button", { name: "Yeni görünüm oluştur", exact: true }).click();
+  await expect(page.getByRole("tab")).toHaveCount(3);
+  await expect(page.getByRole("tab", { name: "Yeni görünüm 2", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Yeni görünüm", exact: true }).click();
+  await expect(page.locator('[data-widget-id="details"]')).toBeVisible();
+  expect(hydrationErrors).toEqual([]);
+});
+
+test("Terminal Lab support opens help and dismisses with Escape", async ({ page }) => {
+  await page.goto("/");
+  const trigger = page.getByRole("button", { name: "Terminal Lab Destek", exact: true });
+  await expect(trigger.locator("svg")).toHaveClass(/lucide-life-buoy/);
+  await trigger.click();
+  const panel = page.getByRole("dialog", { name: "Terminal Lab Destek", exact: true });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByRole("link", { name: "Sorun bildir / Öneri paylaş" })).toHaveAttribute("href", "https://github.com/semihbceylan/atlas-clone/issues");
+  await page.keyboard.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await expect(trigger).toHaveAttribute("aria-expanded", "false");
+});
+
 test("visual tags match Atlas shapes and default to Midas blue", async ({ page }) => {
   await page.goto("/");
   const trigger = page.getByRole("button", { name: "Grafik bağlantı rengi", exact: true });
@@ -40,7 +137,13 @@ test("light theme recolors the whole workspace, menus and drawing controls", asy
   await expect(page.locator(".widget-frame").first()).toHaveCSS("background-color", "rgba(18, 19, 25, 0.62)");
   await trigger.click();
   await toggle.click();
-  await expect(menu).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect.poll(() => menu.evaluate(element => {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = getComputedStyle(element).backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    return Array.from(context.getImageData(0, 0, 1, 1).data);
+  })).toEqual([255, 255, 255, 230]);
   await expect(menu).toHaveCSS("color", "rgb(32, 35, 49)");
   await toggle.hover();
   await expect(toggle).toHaveCSS("background-color", "rgb(233, 234, 242)");
@@ -77,7 +180,13 @@ test("light theme recolors the whole workspace, menus and drawing controls", asy
   await trigger.click();
   await toggle.click();
   await expect(page.locator("body")).toHaveCSS("background-color", "rgb(0, 0, 0)");
-  await expect(menu).toHaveCSS("background-color", "rgb(18, 19, 25)");
+  await expect.poll(() => menu.evaluate(element => {
+    const context = document.createElement("canvas").getContext("2d")!;
+    context.fillStyle = getComputedStyle(element).backgroundColor;
+    context.fillRect(0, 0, 1, 1);
+    const actual = context.getImageData(0, 0, 1, 1).data;
+    return [18, 19, 25, 230].every((value, index) => Math.abs(actual[index] - value) <= 1);
+  })).toBe(true);
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Çizim nesneleri (1)", exact: true }).click();
   await page.getByRole("region", { name: "Çizim nesneleri", exact: true }).getByRole("button", { name: /1\. Dikdörtgen/ }).click();
@@ -124,6 +233,16 @@ test("named watchlists persist independently and chart modes switch without erro
   await page.goto("/");
   const list = page.getByRole("region", { name: "Takip Ettiklerim", exact: true });
   await list.focus();
+  const selector = list.getByLabel("Takip listesi seç", { exact: true });
+  const selectorBox = (await selector.boundingBox())!;
+  const titleWidth = await selector.evaluate(el => {
+    const text = el.parentElement!.querySelector("span")!;
+    const range = document.createRange();
+    range.selectNodeContents(text);
+    return range.getBoundingClientRect().width;
+  });
+  expect(selectorBox.width - titleWidth).toBeLessThan(25);
+  expect(selectorBox.width - titleWidth).toBeGreaterThan(10);
   await expect(list.getByRole("textbox", { name: "Takip listesi adı", exact: true })).toHaveCount(0);
   await list.getByRole("button", { name: "Takip listelerini yönet", exact: true }).click();
   const settings = page.getByRole("dialog", { name: "Takip listesi ayarları", exact: true });
@@ -177,7 +296,7 @@ test("saved views restore modules and news accepts safe imported articles", asyn
   await news.getByLabel("Haber dosyası", { exact: true }).setInputFiles({ name: "unsafe.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify([{ title: "Unsafe", source: "Local test", url: "javascript:alert(1)", publishedAt: "2026-11-15T12:00:00Z", symbols: [] }])) });
   await expect(news.getByRole("alert")).toHaveText("Haber bağlantıları HTTPS olmalı.");
   await expect(news.getByRole("link", { name: "Unsafe ↗" })).toHaveCount(0);
-  await page.getByRole("button", { name: "1 İlk görünüm", exact: true }).click();
+  await page.getByRole("button", { name: "Görünüm seçenekleri", exact: true }).click();
   await page.getByRole("textbox", { name: "Görünüm adı", exact: true }).fill("Haber görünümü");
   await page.getByRole("button", { name: "Görünümü kaydet", exact: true }).click();
   await page.keyboard.press("Escape");
@@ -185,7 +304,7 @@ test("saved views restore modules and news accepts safe imported articles", asyn
   await page.getByRole("button", { name: "Haberler Kaldır", exact: true }).click();
   await page.keyboard.press("Escape");
   await expect(news).toHaveCount(0);
-  await page.getByRole("button", { name: "1 Haber görünümü", exact: true }).click();
+  await page.getByRole("button", { name: "Görünüm seçenekleri", exact: true }).click();
   await page.getByRole("button", { name: "Haber görünümü", exact: true }).click();
   await expect(news).toBeVisible();
 });
@@ -347,6 +466,7 @@ test("local modules add/remove, filter, track symbols and display simulated fill
   await page.getByRole("button", { name: "Modül ekle", exact: true }).click();
   for (const name of ["Hisse tarayıcı Ekle", "Portföy Ekle", "Emir geçmişi Ekle", "Varlık detayı Ekle"]) await page.getByRole("button", { name, exact: true }).click();
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Modül ekle", exact: true })).toHaveCount(0);
   const screener = page.getByRole("region", { name: "Hisse tarayıcı", exact: true });
   await screener.focus();
   await screener.getByRole("textbox", { name: "Tarayıcıda ara" }).fill("ASTOR");
@@ -421,6 +541,36 @@ test("widgets overlap without pushing neighbors, raise on interaction, persist, 
   expect(await page.getByTestId("workspace").evaluate(el => el.scrollTop)).toBe(0);
 });
 
+test("moving widgets stays on grid during the gesture and does not jump on release", async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem("terminal-lab.modules.v1", JSON.stringify(["positions"]));
+    localStorage.setItem("atlas-terminal.layout.v2", JSON.stringify([{ i: "positions", x: 12, y: 6, w: 24, h: 12 }]));
+  });
+  await page.goto("/");
+  const widget = page.locator('[data-widget-id="positions"]');
+  await expect(widget).toBeVisible();
+  const before = (await widget.boundingBox())!;
+  const workspace = (await page.getByTestId("workspace").boundingBox())!;
+  const stepX = workspace.width / 48;
+  const stepY = workspace.height / 24;
+  const x = before.x + 80, y = before.y + 20;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  for (const fraction of [0.7, 1.3, 1.8, 2.2]) {
+    await page.mouse.move(x + stepX * fraction, y + stepY * fraction, { steps: 3 });
+    await expect.poll(async () => {
+      const preview = (await widget.boundingBox())!;
+      return Math.max(Math.abs(preview.x - before.x - Math.round(fraction) * stepX), Math.abs(preview.y - before.y - Math.round(fraction) * stepY));
+    }).toBeLessThan(2);
+  }
+  const preview = (await widget.boundingBox())!;
+  await page.mouse.up();
+  await expect.poll(async () => {
+    const final = (await widget.boundingBox())!;
+    return Math.max(Math.abs(final.x - preview.x), Math.abs(final.y - preview.y));
+  }).toBeLessThan(1);
+});
+
 for (const direction of ["n", "ne", "e", "se", "s", "sw", "w", "nw"]) {
   test(`widget resizes from ${direction} and respects its minimum grid size`, async ({ page }) => {
     await page.addInitScript(() => {
@@ -434,11 +584,31 @@ for (const direction of ["n", "ne", "e", "se", "s", "sw", "w", "nw"]) {
     await expect(widget.locator(".react-resizable-handle")).toHaveCount(8);
     const before = (await widget.boundingBox())!;
     const grip = (await handle.boundingBox())!;
+    if (direction.length === 1) {
+      await expect(handle).toHaveCSS("transform", "none");
+      if (direction === "n" || direction === "s") {
+        expect(grip.height).toBe(8);
+        expect(Math.abs(grip.width - before.width)).toBeLessThan(1);
+        expect(Math.abs(grip.y - (direction === "n" ? before.y : before.y + before.height - 8))).toBeLessThan(1);
+      } else {
+        expect(grip.width).toBe(8);
+        expect(Math.abs(grip.height - before.height)).toBeLessThan(1);
+        expect(Math.abs(grip.x - (direction === "w" ? before.x : before.x + before.width - 8))).toBeLessThan(1);
+      }
+    }
     const x = grip.x + grip.width / 2, y = grip.y + grip.height / 2;
     const dx = direction.includes("w") ? 800 : direction.includes("e") ? -800 : 0;
     const dy = direction.includes("n") ? 800 : direction.includes("s") ? -800 : 0;
     await page.mouse.move(x, y);
     await page.mouse.down();
+    if (direction === "e" || direction === "s") {
+      const step = direction === "e" ? (before.width + 1) / 24 : (before.height + 1) / 12;
+      await page.mouse.move(x + (direction === "e" ? -step * 0.7 : 0), y + (direction === "s" ? -step * 0.7 : 0));
+      await expect.poll(async () => {
+        const preview = (await widget.boundingBox())!;
+        return Math.abs((direction === "e" ? before.width - preview.width : before.height - preview.height) - step);
+      }).toBeLessThan(2);
+    }
     await page.mouse.move(x + dx, y + dy, { steps: 15 });
     await page.mouse.up();
     await expect.poll(async () => {
@@ -458,6 +628,7 @@ test("every module has a working options menu with duplicate, expand, reset, exp
   await page.getByRole("button", { name: "Modül ekle", exact: true }).click();
   for (const name of ["Hisse tarayıcı Ekle", "Portföy Ekle", "Emir geçmişi Ekle", "Varlık detayı Ekle"]) await page.getByRole("button", { name, exact: true }).click();
   await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Modül ekle", exact: true })).toHaveCount(0);
   for (const label of ["Grafik", "Pozisyonlar", "Takip Ettiklerim", "Hisse tarayıcı", "Portföy", "Emir geçmişi", "Varlık detayı"]) {
     const trigger = page.getByRole("button", { name: `${label} seçenekleri`, exact: true });
     await trigger.focus();
@@ -465,6 +636,7 @@ test("every module has a working options menu with duplicate, expand, reset, exp
     const menu = page.getByRole("menu", { name: `${label} seçenekleri`, exact: true });
     await expect(menu.getByRole("menuitem")).toHaveCount(5);
     await page.keyboard.press("Escape");
+    await expect(menu).toHaveCount(0);
   }
   const positions = page.locator('[data-widget-id="positions"]');
   const options = async () => { await positions.getByRole("button", { name: "Pozisyonlar seçenekleri", exact: true }).focus(); await page.keyboard.press("Enter"); };

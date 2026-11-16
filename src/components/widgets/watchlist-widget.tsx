@@ -137,7 +137,11 @@ export function WatchlistWidget({ api }: { api: LiveMarketApi }) {
   );
 
   return (
-    <WidgetFrame ariaLabel="Takip Ettiklerim" title={<select aria-label="Takip listesi seç" value={activeList} onChange={e => dispatch(selectWatchlistById(e.target.value))} className="widget-no-drag min-w-0 flex-1 truncate bg-transparent text-[13px] font-medium outline-none">{lists.map(list => <option className="bg-terminal-panel" key={list.id} value={list.id}>{list.name}</option>)}</select>} actions={actions} bodyClassName="flex flex-col">
+    <WidgetFrame ariaLabel="Takip Ettiklerim" title={<div className="widget-no-drag relative min-w-0 max-w-[60%] shrink-0 text-[13px] font-medium">
+      <span aria-hidden className="invisible block truncate pr-5">{lists.find(list => list.id === activeList)?.name ?? "Takip Ettiklerim"}</span>
+      <select aria-label="Takip listesi seç" value={activeList} onChange={e => dispatch(selectWatchlistById(e.target.value))} className="absolute inset-0 w-full cursor-pointer appearance-none truncate bg-transparent pr-5 outline-none">{lists.map(list => <option className="bg-terminal-panel" key={list.id} value={list.id}>{list.name}</option>)}</select>
+      <ChevronDown aria-hidden className="pointer-events-none absolute right-0 top-1/2 size-3 -translate-y-1/2 text-terminal-muted"/>
+    </div>} actions={actions} bodyClassName="flex flex-col">
       {watchlist.length === 0 ? (
         <WatchlistEmptyState onAddSymbol={() => setPickerOpen(true)} />
       ) : (
