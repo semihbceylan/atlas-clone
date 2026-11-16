@@ -57,6 +57,7 @@ export function TradingTerminal() {
       <DashboardGrid widgets={widgets} />
       <footer className="flex min-h-6 shrink-0 flex-wrap items-center justify-between gap-x-3 border-t border-terminal-border px-3 py-1 text-[10px] text-terminal-muted">
         <span>Independent portfolio demo · Not affiliated with Midas · Simulated orders</span>
+        <a href="https://github.com/semihbceylan/atlas-clone" target="_blank" rel="noopener noreferrer" className="hover:text-terminal-text">GitHub · Kaynak kodu</a>
         <a href="https://www.tradingview.com/" target="_blank" rel="noreferrer" className="hover:text-terminal-text">TradingView Lightweight Charts™ · Copyright (с) 2025 TradingView, Inc.</a>
       </footer>
     </div>

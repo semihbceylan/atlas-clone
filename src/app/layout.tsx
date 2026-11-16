@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import { Analytics } from "@vercel/analytics/next";
 import { ReduxProvider } from "@/components/providers/redux-provider";
 import "./globals.css";
 
@@ -32,6 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       */}
       <body className="h-full overflow-hidden">
         <ReduxProvider>{children}</ReduxProvider>
+        <Analytics />
       </body>
     </html>
   );
